@@ -1,6 +1,4 @@
-﻿using System.Diagnostics;
-using System.Text;
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace AudioSniffer.Services;
@@ -19,7 +17,7 @@ public class AudioAnalysisService : IAudioAnalysisService
         _httpClient.Timeout = TimeSpan.FromMinutes(5); 
     }
 
-    public async Task<string> AnalyzeAudioAsync(byte[] audioData, string fileName)
+    public async Task<string> AnalyzeAudioAsync(byte[] audio, string fileName)
     {
         int _maxRetries = 3;
         int _retryDelayMs = 2000;
@@ -31,7 +29,7 @@ public class AudioAnalysisService : IAudioAnalysisService
                 try
                 {
                     using var _content = new MultipartFormDataContent();
-                    var _fileContent = new ByteArrayContent(audioData);
+                    ByteArrayContent _fileContent = new ByteArrayContent(audio);
                     _fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("audio/mpeg");
                     _content.Add(_fileContent, "file", fileName);
 
@@ -52,8 +50,8 @@ public class AudioAnalysisService : IAudioAnalysisService
                         PropertyNameCaseInsensitive = true
                     });
 
-                    var _overallConfidence = _result?.OverallConfidence ?? 0;
-                    var _isSuspicious = _result?.IsSuspicious ?? false;
+                    float _overallConfidence = _result?.OverallConfidence ?? 0;
+                    bool _isSuspicious = _result?.IsSuspicious ?? false;
                     _logger.LogInformation("Parsed values - Confidence: {Confidence}, IsSuspicious: {IsSuspicious}", _overallConfidence, _isSuspicious);
 
                     if (_isSuspicious)
@@ -77,31 +75,31 @@ public class AudioAnalysisService : IAudioAnalysisService
                 }
             }
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException httpRequestException)
         {
-            _logger.LogError(ex, "HTTP error while analyzing audio after {MaxRetries} attempts: {FileName}", _maxRetries, fileName);
+            _logger.LogError(httpRequestException, "HTTP error while analyzing audio after {MaxRetries} attempts: {FileName}", _maxRetries, fileName);
             return "Не удалось подключиться к серверу анализа. Проверьте, что бэкенд запущен на localhost:5000";
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            _logger.LogError(ex, "Error analyzing audio file: {FileName}", fileName);
+            _logger.LogError(exception, "Error analyzing audio file: {FileName}", fileName);
             return "Ошибка при обработке аудио";
         }
 
         return "Не удалось подключиться к серверу анализа. Проверьте, что бэкенд запущен на localhost:5000";
     }
 
-    public async Task<float[]> GetWaveformDataAsync(byte[] audioData)
+    public async Task<float[]> GetWaveformDataAsync(byte[] audio)
     {
         try
         {
             await Task.Delay(100);
 
-            var _samples = new List<float>();
-            var _sampleCount = 200;
-            var _stepSize = Math.Max(1, audioData.Length / _sampleCount);
+            List<float> _samples = new List<float>();
+            int _sampleCount = 200;
+            int _stepSize = Math.Max(1, audio.Length / _sampleCount);
 
-            for (int i = 0; i < audioData.Length; i += _stepSize)
+            for (int i = 0; i < audio.Length; i += _stepSize)
             {
                 if (_samples.Count >= _sampleCount)
                     break;
@@ -109,9 +107,9 @@ public class AudioAnalysisService : IAudioAnalysisService
                 float _sum = 0;
                 int _count = 0;
 
-                for (int j = i; j < Math.Min(i + _stepSize, audioData.Length); j++)
+                for (int j = i; j < Math.Min(i + _stepSize, audio.Length); j++)
                 {
-                    float _value = (audioData[j] - 128) / 128f;
+                    float _value = (audio[j] - 128) / 128f;
                     _sum += Math.Abs(_value);
                     _count++;
                 }
@@ -122,7 +120,8 @@ public class AudioAnalysisService : IAudioAnalysisService
 
             if (_samples.Count > 0)
             {
-                var _maxValue = _samples.Max(s => Math.Abs(s));
+                float _maxValue = _samples.Max(s => Math.Abs(s));
+
                 if (_maxValue > 0)
                 {
                     for (int i = 0; i < _samples.Count; i++)
@@ -134,9 +133,9 @@ public class AudioAnalysisService : IAudioAnalysisService
 
             return _samples.ToArray();
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            _logger.LogError(ex, "Error extracting waveform data");
+            _logger.LogError(exception, "Error extracting waveform data");
             throw;
         }
     }

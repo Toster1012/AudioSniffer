@@ -44,23 +44,21 @@ html, body {
     text-rendering: optimizeLegibility;
 }
 
-/* Hide scrollbar for all browsers */
 html {
-    overflow-y: auto;
+    overflow-y: hidden;
     scrollbar-width: none; /* Firefox */
     -ms-overflow-style: none; /* IE and Edge */
 }
 
-    html::-webkit-scrollbar {
-        display: none; /* Chrome, Safari, Opera */
-    }
+html::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+}
 
 body {
     display: flex;
     flex-direction: column;
 }
 
-/* Container */
 .audio-analyzer-container {
     min-height: 100vh;
     position: relative;
@@ -79,7 +77,6 @@ body {
     overflow: hidden;
 }
 
-/* Animated Mesh Gradient Grid */
 .neon-grid {
     display: block;
     position: absolute;
@@ -110,7 +107,6 @@ body {
     }
 }
 
-/* Floating Mesh Gradient Blobs */
 .neon-orb {
     position: absolute;
     border-radius: 50%;
@@ -186,7 +182,6 @@ body {
     }
 }
 
-/* Content Wrapper */
 .content-wrapper {
     position: relative;
     z-index: 1;
@@ -199,7 +194,6 @@ body {
     min-height: 100vh;
 }
 
-/* Title */
 .neon-title {
     text-align: center;
     font-size: 64px;
@@ -242,7 +236,6 @@ body {
     }
 }
 
-/* Upload Section */
 .upload-section {
     text-align: center;
     margin-bottom: 48px;
@@ -302,7 +295,6 @@ body {
     letter-spacing: -0.022em;
 }
 
-/* Spinner */
 .spinner {
     display: inline-block;
     width: 16px;
@@ -319,7 +311,6 @@ body {
     }
 }
 
-/* Card */
 .neon-card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -333,7 +324,6 @@ body {
         box-shadow: var(--shadow-md);
     }
 
-/* File Info */
 .file-info {
     display: flex;
     align-items: center;
@@ -354,7 +344,6 @@ body {
     font-weight: 500;
 }
 
-/* Waveform Container */
 .waveform-container {
     margin-bottom: 32px;
     padding: 48px 40px;
@@ -387,7 +376,6 @@ body {
     height: 200px;
 }
 
-/* Result Section */
 .result-section {
     margin-top: 40px;
 }
@@ -428,7 +416,6 @@ body {
     margin: 0;
 }
 
-/* Error Message */
 .error-message {
     display: flex;
     align-items: center;
@@ -457,7 +444,6 @@ body {
     font-size: 20px;
 }
 
-/* Fade In Animation */
 .fade-in {
     animation: fadeIn 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
@@ -474,7 +460,6 @@ body {
     }
 }
 
-/* Responsive */
 @media (max-width: 1068px) {
     .content-wrapper {
         max-width: 692px;
@@ -551,18 +536,12 @@ body {
     }
 }
 
-/* Smooth scroll */
-html {
-    scroll-behavior: smooth;
-}
 
-/* Focus styles */
 .neon-button:focus-visible {
     outline: 4px solid rgba(0, 125, 250, 0.6);
     outline-offset: 4px;
 }
 
-/* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

@@ -14,15 +14,19 @@ class AudioProcessor:
         path = Path(file_path)
 
         if not path.exists():
+            print(f"Validation failed: File not found - {file_path}")
             return False, "Файл не найден"
 
         if path.suffix.lower() not in AudioProcessor.SUPPORTED_FORMATS:
+            print(f"Validation failed: Unsupported format - {path.suffix}. Supported: {AudioProcessor.SUPPORTED_FORMATS}")
             return False, f"Неподдерживаемый формат. Разрешены: {', '.join(AudioProcessor.SUPPORTED_FORMATS)}"
 
         file_size_mb = path.stat().st_size / (1024 * 1024)
         if file_size_mb > AudioProcessor.MAX_FILE_SIZE_MB:
+            print(f"Validation failed: File too large - {file_size_mb:.1f} MB. Max: {AudioProcessor.MAX_FILE_SIZE_MB} MB")
             return False, f"Файл слишком большой ({file_size_mb:.1f} MB). Максимум {AudioProcessor.MAX_FILE_SIZE_MB} MB"
 
+        print(f"Validation passed for file: {file_path}")
         return True, "OK"
 
     @staticmethod

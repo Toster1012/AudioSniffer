@@ -48,7 +48,6 @@
         @if (_selectedFileName != null)
         {
             <div class="file-info neon-card fade-in">
-                <span class="file-icon">🎵</span>
                 <span class="file-name">@_selectedFileName</span>
             </div>
         }
@@ -94,14 +93,14 @@
     private float[]? _waveformData;
     private bool _isProcessing;
 
-    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    private async Task HandleFileSelected(InputFileChangeEventArgs eventArgs)
     {
         _errorMessage = null;
         _analysisResult = null;
         _waveformData = null;
         _selectedFileName = null;
 
-        var file = e.File;
+        IBrowserFile file = eventArgs.File;
         
         if (file == null)
             return;
@@ -118,12 +117,12 @@
 
         try
         {
-            using var stream = file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
+            using var _stream = file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
             using var memoryStream = new MemoryStream();
-            await stream.CopyToAsync(memoryStream);
-            var audioData = memoryStream.ToArray();
+            await _stream.CopyToAsync(memoryStream);
+            byte[]? _audioData = memoryStream.ToArray();
 
-            _waveformData = await AudioService.GetWaveformDataAsync(audioData);
+            _waveformData = await AudioService.GetWaveformDataAsync(_audioData);
             StateHasChanged();
             
             if (_waveformData != null && _waveformData.Length > 0)
@@ -131,11 +130,11 @@
                 await DrawWaveformAsync();
             }
 
-            _analysisResult = await AudioService.AnalyzeAudioAsync(audioData, file.Name);
+            _analysisResult = await AudioService.AnalyzeAudioAsync(_audioData, file.Name);
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            _errorMessage = $"Ошибка при обработке файла: {ex.Message}";
+            _errorMessage = $"Ошибка при обработке файла: {exception.Message}";
         }
         finally
         {
@@ -149,7 +148,7 @@
         if (_waveformData == null || _waveformData.Length == 0)
             return;
 
-        var dataJson = System.Text.Json.JsonSerializer.Serialize(_waveformData);
-        await JSRuntime.InvokeVoidAsync("drawWaveform", _canvasRef, dataJson);
+        string? _json = System.Text.Json.JsonSerializer.Serialize(_waveformData);
+        await JSRuntime.InvokeVoidAsync("drawWaveform", _canvasRef, _json);
     }
 }

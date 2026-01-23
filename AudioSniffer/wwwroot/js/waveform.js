@@ -2,7 +2,6 @@
     const data = JSON.parse(dataJson);
     const ctx = canvas.getContext('2d');
     
-    // Set canvas size
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width * dpr;
@@ -13,14 +12,11 @@
     const height = rect.height;
     const centerY = height / 2;
     
-    // Clear canvas
     ctx.clearRect(0, 0, width, height);
     
-    // Get color
     const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const barColor = isDark ? '#0077ed' : '#0071e3';
     
-    // Draw waveform with thinner bars
     const barWidth = Math.max(width / data.length, 1.5);
     const maxAmplitude = Math.max(...data.map(Math.abs));
     const gap = Math.max(barWidth * 0.3, 1);
@@ -33,7 +29,6 @@
         
         ctx.fillStyle = barColor;
         
-        // Draw thin bar with rounded corners
         const barX = x + gap / 2;
         const barW = actualBarWidth;
         const radius = Math.min(barW / 2, 1.5);
@@ -46,7 +41,6 @@
         ctx.fill();
     }
     
-    // Animate waveform
     animateWaveform(canvas, data);
 };
 
@@ -85,11 +79,9 @@ function animateWaveform(canvas, data) {
         
         frame++;
         
-        // Clear with fade effect
         ctx.fillStyle = backgroundColor;
         ctx.fillRect(0, 0, width, height);
         
-        // Draw animated waveform
         const barWidth = Math.max(width / data.length, 1.5);
         const maxAmplitude = Math.max(...data.map(Math.abs));
         const gap = Math.max(barWidth * 0.3, 1);
@@ -98,24 +90,20 @@ function animateWaveform(canvas, data) {
         for (let i = 0; i < data.length; i++) {
             const x = i * barWidth;
             
-            // Более выраженная волновая анимация
             const phase = (frame * 0.05 + i * 0.15) % (Math.PI * 2);
             const waveAnimation = Math.sin(phase) * 0.25 + 1;
             
-            // Добавляем пульсацию
             const pulsePhase = (frame * 0.03) % (Math.PI * 2);
             const pulseAnimation = Math.sin(pulsePhase) * 0.15 + 1;
             
             const normalizedValue = (data[i] / maxAmplitude) * waveAnimation * pulseAnimation;
             const barHeight = Math.abs(normalizedValue) * (height / 2) * 0.85;
             
-            // Градиент для более красивого эффекта
             const gradient = ctx.createLinearGradient(x, centerY - barHeight, x, centerY + barHeight);
             gradient.addColorStop(0, barColor);
             gradient.addColorStop(1, isDark ? 'rgba(0, 119, 237, 0.6)' : 'rgba(0, 113, 227, 0.6)');
             ctx.fillStyle = gradient;
             
-            // Draw thin bar with rounded corners
             const barX = x + gap / 2;
             const barW = actualBarWidth;
             const radius = Math.min(barW / 2, 1.5);
@@ -128,7 +116,6 @@ function animateWaveform(canvas, data) {
             ctx.fill();
         }
         
-        // Продолжаем анимацию бесконечно
         requestAnimationFrame(animate);
     }
     

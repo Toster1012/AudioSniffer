@@ -37,7 +37,6 @@ async def root():
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     try:
-        # Test that all detectors can be initialized
         silence_detector = SilenceDetector()
         pitch_detector = PitchDetector()
         splice_detector = SpliceDetector()
@@ -69,12 +68,44 @@ async def analyze_audio(
 
     temp_file = None
     try:
-        suffix = Path(file.filename).suffix
+        import email.utils
+        import quopri
+
+        decoded_filename = file.filename
+        if file.filename and '=' in file.filename:
+            try:
+                decoded_filename = email.utils.parseaddr(file.filename)[1]
+                if decoded_filename.startswith('=?') and decoded_filename.endswith('?='):
+                    from email.header import decode_header
+                    decoded_header = decode_header(decoded_filename)
+                    if decoded_header and decoded_header[0]:
+                        decoded_filename = decoded_header[0][0]
+                        if isinstance(decoded_filename, bytes):
+                            decoded_filename = decoded_filename.decode(decoded_header[0][1] or 'utf-8')
+            except Exception as e:
+                print(f"Failed to decode filename: {e}")
+
+        print(f"Original filename: {file.filename}, decoded: {decoded_filename}")
+        suffix = Path(decoded_filename).suffix
+        print(f"Extracted suffix: {suffix}")
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
 
         content = await file.read()
         temp_file.write(content)
         temp_file.close()
+
+        print(f"Temp file before fix: {temp_file.name}")
+        print(f"File ends with suffix: {temp_file.name.endswith(suffix)}")
+
+        if not temp_file.name.endswith(suffix):
+            correct_name = temp_file.name + suffix
+            print(f"Renaming {temp_file.name} to {correct_name}")
+            os.rename(temp_file.name, correct_name)
+            temp_file.name = correct_name
+
+        print(f"Created temp file: {temp_file.name}")
+        print(f"File exists: {os.path.exists(temp_file.name)}")
+        print(f"File size: {os.path.getsize(temp_file.name) if os.path.exists(temp_file.name) else 'N/A'}")
 
         is_valid, message = AudioProcessor.validate_audio_file(temp_file.name)
         if not is_valid:
@@ -92,7 +123,10 @@ async def analyze_audio(
 
         detections = [silence_result, pitch_result, splice_result]
 
-        overall_confidence = max(d.confidence for d in detections)
+        if detections:
+            overall_confidence = max(d.confidence for d in detections)
+        else:
+            overall_confidence = 0.0
         is_suspicious = overall_confidence > 0.3
 
         return AnalysisResult(
@@ -106,7 +140,7 @@ async def analyze_audio(
     except Exception as e:
         import traceback
         error_details = f"Ошибка анализа: {str(e)}\n{traceback.format_exc()}"
-        print(error_details)  # Логирование в консоль для отладки
+        print(error_details)
         raise HTTPException(status_code=500, detail=f"Ошибка анализа: {str(e)}")
 
     finally:
