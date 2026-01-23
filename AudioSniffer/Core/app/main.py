@@ -92,8 +92,8 @@ async def analyze_audio(
 
         detections = [silence_result, pitch_result, splice_result]
 
-        overall_confidence = sum(d.confidence for d in detections) / len(detections)
-        is_suspicious = overall_confidence > 0.5
+        overall_confidence = max(d.confidence for d in detections)
+        is_suspicious = overall_confidence > 0.3
 
         return AnalysisResult(
             audio_file_id=audio_file_id,

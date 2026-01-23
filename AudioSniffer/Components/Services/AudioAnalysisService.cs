@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace AudioSniffer.Services;
 
@@ -44,6 +45,8 @@ public class AudioAnalysisService : IAudioAnalysisService
                     }
 
                     var _resultJson = await _response.Content.ReadAsStringAsync();
+                    _logger.LogInformation("Backend response: {Response}", _resultJson);
+
                     var _result = JsonSerializer.Deserialize<AnalysisResponse>(_resultJson, new JsonSerializerOptions
                     {
                         PropertyNameCaseInsensitive = true
@@ -51,14 +54,20 @@ public class AudioAnalysisService : IAudioAnalysisService
 
                     var _overallConfidence = _result?.OverallConfidence ?? 0;
                     var _isSuspicious = _result?.IsSuspicious ?? false;
+                    _logger.LogInformation("Parsed values - Confidence: {Confidence}, IsSuspicious: {IsSuspicious}", _overallConfidence, _isSuspicious);
 
                     if (_isSuspicious)
                     {
-                        return $"Аудио возможно сгенерировано процент: {_overallConfidence:P0}";
+                        if (_overallConfidence >= 0.9f)
+                            return $"Аудио сгенерировано нейросетью, с вероятностью: {_overallConfidence:P0}";
+                        else if (_overallConfidence >= 0.7f)
+                            return $"Аудио вероятно сгенерировано нейросетью, с шансом: {_overallConfidence:P0}";
+                        else 
+                            return $"Аудио возможно сгенерировано нейросетью, с шансом: {_overallConfidence:P0}";
                     }
                     else
                     {
-                        return $"Аудио не было сгенерировано, процент: {(1 - _overallConfidence):P0}";
+                        return $"Аудио врядли сгенерировано нейросетью, вероятность генерации: {_overallConfidence:P0}";
                     }
                 }
                 catch (HttpRequestException ex) when (attempt < _maxRetries)
@@ -135,7 +144,9 @@ public class AudioAnalysisService : IAudioAnalysisService
     private class AnalysisResponse
     {
         public string AudioFileId { get; set; } = string.Empty;
+        [JsonPropertyName("overall_confidence")]
         public float OverallConfidence { get; set; }
+        [JsonPropertyName("is_suspicious")]
         public bool IsSuspicious { get; set; }
         public List<Detection> Detections { get; set; } = new();
         public Metadata Metadata { get; set; } = new();
