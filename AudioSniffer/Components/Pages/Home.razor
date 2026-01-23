@@ -1,0 +1,155 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@using AudioSniffer.Services
+@inject IAudioAnalysisService AudioService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>AudioSniffer - Анализ аудио</PageTitle>
+
+<div class="audio-analyzer-container">
+    <div class="neon-background">
+        <div class="neon-grid"></div>
+        <div class="neon-orb neon-orb-1"></div>
+        <div class="neon-orb neon-orb-2"></div>
+        <div class="neon-orb neon-orb-3"></div>
+        <div class="neon-orb neon-orb-4"></div>
+    </div>
+    
+    <div class="content-wrapper">
+        <h1 class="neon-title">
+            <span class="glitch">AudioSniffer</span>
+        </h1>
+        <p class="subtitle">Определяет, создано ли аудио с помощью ИИ</p>
+        
+        <div class="upload-section">
+            <InputFile 
+                OnChange="HandleFileSelected" 
+                class="file-input" 
+                id="fileInput"
+                accept="audio/*"
+                disabled="@_isProcessing" />
+            
+            <label for="fileInput" class="neon-button @(_isProcessing ? "disabled" : "")">
+                <span class="button-glow"></span>
+                <span class="button-text">
+                    @if (_isProcessing)
+                    {
+                        <span class="spinner"></span>
+                        <text>Обработка...</text>
+                    }
+                    else
+                    {
+                        <text>Загрузить файл</text>
+                    }
+                </span>
+            </label>
+        </div>
+
+        @if (_selectedFileName != null)
+        {
+            <div class="file-info neon-card fade-in">
+                <span class="file-icon">🎵</span>
+                <span class="file-name">@_selectedFileName</span>
+            </div>
+        }
+
+        @if (_waveformData != null && _waveformData.Length > 0)
+        {
+            <div class="waveform-container neon-card fade-in">
+                <p class="waveform-title">Спектрограмма</p>
+                <div class="canvas-container">
+                    <canvas @ref="_canvasRef" id="waveformCanvas"></canvas>
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(_analysisResult))
+        {
+            <div class="result-section fade-in">
+                <div class="result-label neon-card">
+                    <span class="label-glow">Результат:</span>
+                </div>
+                
+                <div class="result-content neon-card">
+                    <p class="result-text">@_analysisResult</p>
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="error-message neon-card fade-in">
+                <span class="error-icon"></span>
+                <span>@_errorMessage</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private ElementReference _canvasRef;
+    private string? _selectedFileName;
+    private string? _analysisResult;
+    private string? _errorMessage;
+    private float[]? _waveformData;
+    private bool _isProcessing;
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        _errorMessage = null;
+        _analysisResult = null;
+        _waveformData = null;
+        _selectedFileName = null;
+
+        var file = e.File;
+        
+        if (file == null)
+            return;
+
+        if (file.Size > 50 * 1024 * 1024)
+        {
+            _errorMessage = "Файл слишком большой. Максимальный размер: 50 МБ";
+            return;
+        }
+
+        _isProcessing = true;
+        _selectedFileName = file.Name;
+        StateHasChanged();
+
+        try
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+            var audioData = memoryStream.ToArray();
+
+            _waveformData = await AudioService.GetWaveformDataAsync(audioData);
+            StateHasChanged();
+            
+            if (_waveformData != null && _waveformData.Length > 0)
+            {
+                await DrawWaveformAsync();
+            }
+
+            _analysisResult = await AudioService.AnalyzeAudioAsync(audioData, file.Name);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Ошибка при обработке файла: {ex.Message}";
+        }
+        finally
+        {
+            _isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DrawWaveformAsync()
+    {
+        if (_waveformData == null || _waveformData.Length == 0)
+            return;
+
+        var dataJson = System.Text.Json.JsonSerializer.Serialize(_waveformData);
+        await JSRuntime.InvokeVoidAsync("drawWaveform", _canvasRef, dataJson);
+    }
+}
