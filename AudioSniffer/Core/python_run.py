@@ -1,7 +1,3 @@
-"""
-Запуск FastAPI сервера для AudioSniffer
-Положите этот файл в папку Core/ (рядом с папкой app)
-"""
 import uvicorn
 import sys
 import os

@@ -551,3 +551,55 @@ body {
         transition-duration: 0.01ms !important;
     }
 }
+
+.blazor-error-ui {
+    display: none !important;
+}
+
+.blazor-error-boundary {
+    display: none !important;
+}
+
+#blazor-error-ui {
+    display: none !important;
+}
+
+div[class*="blazor-error"] {
+    display: none !important;
+}
+
+div[class*="error-ui"] {
+    display: none !important;
+}
+
+div[class*="unhandled-error"] {
+    display: none !important;
+}
+
+div[class*="reload"] {
+    display: none !important;
+}
+
+div[class*="circuit-error"] {
+    display: none !important;
+}
+
+div:has-text("An unhandled error has occurred") {
+
+/* Target the specific error message text */
+div:has-text("An unhandled error has occurred") {
+    display: none !important;
+}
+
+div:has-text("Reload") {
+    display: none !important;
+}
+
+/* Hide the error boundary container */
+div[role="alert"] {
+    display: none !important;
+}
+
+div[aria-live="assertive"] {
+    display: none !important;
+}

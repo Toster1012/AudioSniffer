@@ -13,7 +13,7 @@ if not exist "AudioSniffer.sln" (
 REM Start Python backend in a separate window
 start "AudioSniffer Backend" /MIN cmd /c start_backend.bat
 
-echo Waiting for Python backend to start...
+echo Waiting for backend to start...
 timeout /t 15 /nobreak >nul
 
 REM Check if backend is running with multiple retries

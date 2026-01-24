@@ -1,5 +1,5 @@
 @echo off
-echo Starting AudioSniffer Python Backend...
+echo Starting AudioSniffer Backend...
 echo ======================================
 
 cd /d %~dp0AudioSniffer\Core
@@ -23,7 +23,7 @@ call ..\..\venv\Scripts\activate.bat
 
 REM Install requirements if needed
 if not exist "..\..\venv\requirements_installed" (
-    echo Installing Python requirements...
+    echo Installing requirements...
     pip install -r python_requirements.txt
     echo. > ..\..\venv\requirements_installed
 )
