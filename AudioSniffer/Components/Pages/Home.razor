@@ -1,5 +1,5 @@
 ﻿@page "/"
-@rendermode InteractiveServer
+@rendermode RenderMode.InteractiveServer
 @using AudioSniffer.Services
 @using System.IO
 @using System.Linq
@@ -25,16 +25,16 @@
         
         <div class="upload-section">
             <InputFile
-                OnChange="HandleFileSelected"
+                OnChange="HandleFileSelectedAsync"
                 class="file-input"
                 id="fileInput"
                 accept="audio/*"
-                disabled="@_isProcessing" />
+                disabled="@_isProcessingFile" />
 
-            <label for="fileInput" class="neon-button @(_isProcessing ? "disabled" : "")">
+            <label for="fileInput" class="neon-button @(_isProcessingFile ? "disabled" : "")">
                 <span class="button-glow"></span>
                 <span class="button-text">
-                    @if (_isProcessing)
+                    @if (_isProcessingFile)
                     {
                         <span class="spinner"></span>
                         <text>Обработка...</text>
@@ -54,16 +54,16 @@
             </div>
         }
 
-        @if (_waveformData != null && _waveformData.Length > 0)
+        @if (_waveformDataArray != null && _waveformDataArray.Length > 0)
         {
             <div class="waveform-container neon-card fade-in">
                 <div class="canvas-container">
-                    <canvas @ref="_canvasRef" id="waveformCanvas"></canvas>
+                    <canvas @ref="_waveformCanvasReference" id="waveformCanvas"></canvas>
                 </div>
             </div>
         }
 
-        @if (!string.IsNullOrEmpty(_analysisResult))
+        @if (!string.IsNullOrEmpty(_analysisResultText))
         {
             <div class="result-section fade-in">
                 <div class="result-label neon-card">
@@ -71,126 +71,126 @@
                 </div>
 
                 <div class="result-content neon-card">
-                    <p class="result-text">@_analysisResult</p>
+                    <p class="result-text">@_analysisResultText</p>
                 </div>
             </div>
         }
 
-        @if (!string.IsNullOrEmpty(_errorMessage))
+        @if (!string.IsNullOrEmpty(_errorMessageText))
         {
             <div class="error-message neon-card fade-in">
                 <span class="error-icon"></span>
-                <span>@_errorMessage</span>
+                <span>@_errorMessageText</span>
             </div>
         }
     </div>
 </div>
 
 @code {
-    private ElementReference _canvasRef;
+    private ElementReference _waveformCanvasReference;
     private string? _selectedFileName;
-    private string? _analysisResult;
-    private string? _errorMessage;
-    private float[]? _waveformData;
-    private bool _isProcessing;
+    private string? _analysisResultText;
+    private string? _errorMessageText;
+    private float[]? _waveformDataArray;
+    private bool _isProcessingFile;
 
-    private async Task HandleFileSelected(InputFileChangeEventArgs eventArgs)
+    private async Task HandleFileSelectedAsync(InputFileChangeEventArgs file_change_event)
     {
-        _errorMessage = null;
-        _analysisResult = null;
-        _waveformData = null;
+        _errorMessageText = null;
+        _analysisResultText = null;
+        _waveformDataArray = null;
         _selectedFileName = null;
 
-        IBrowserFile file = eventArgs.File;
+        IBrowserFile selected_file = file_change_event.File;
 
-        if (file == null)
+        if (selected_file == null)
             return;
 
-        if (file.Size > 50 * 1024 * 1024)
+        if (selected_file.Size > 50 * 1024 * 1024)
         {
-            _errorMessage = "Файл слишком большой. Максимальный размер: 50 МБ";
+            _errorMessageText = "Файл слишком большой. Максимальный размер: 50 МБ";
             return;
         }
 
-        if (file.Size == 0)
+        if (selected_file.Size == 0)
         {
-            _errorMessage = "Файл пустой. Пожалуйста, выберите действительный аудиофайл.";
+            _errorMessageText = "Файл пустой. Пожалуйста, выберите действительный аудиофайл.";
             return;
         }
 
-        string fileExtension = Path.GetExtension(file.Name)?.ToLowerInvariant();
-        string[] allowedExtensions = { ".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a", ".wma" };
+        string file_extension = Path.GetExtension(selected_file.Name)?.ToLowerInvariant() ?? string.Empty;
+        string[] allowed_audio_extensions = { ".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a", ".wma" };
 
-        if (string.IsNullOrEmpty(fileExtension) || !allowedExtensions.Contains(fileExtension))
+        if (string.IsNullOrEmpty(file_extension) || !allowed_audio_extensions.Contains(file_extension))
         {
-            _errorMessage = "Неверный формат файла. Разрешены только аудиофайлы (MP3, WAV, OGG, AAC, FLAC, M4A, WMA).";
+            _errorMessageText = "Неверный формат файла. Разрешены только аудиофайлы (MP3, WAV, OGG, AAC, FLAC, M4A, WMA).";
             return;
         }
 
-        if (!IsValidAudioFileExtension(file.Name))
+        if (!IsValidAudioFileExtension(selected_file.Name))
         {
-            _errorMessage = "Неверное расширение файла. Пожалуйста, загрузите действительный аудиофайл.";
+            _errorMessageText = "Неверное расширение файла. Пожалуйста, загрузите действительный аудиофайл.";
             return;
         }
 
-        _isProcessing = true;
-        _selectedFileName = SanitizeFileName(file.Name);
+        _isProcessingFile = true;
+        _selectedFileName = SanitizeFileName(selected_file.Name);
         StateHasChanged();
 
         try
         {
-            using var stream = file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
-            using var memoryStream = new MemoryStream();
-            await stream.CopyToAsync(memoryStream);
-            byte[] audioData = memoryStream.ToArray();
+            await using Stream file_stream = selected_file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
+            using MemoryStream memory_stream = new MemoryStream();
+            await file_stream.CopyToAsync(memory_stream);
+            byte[] audio_file_data = memory_stream.ToArray();
 
-            if (audioData.Length == 0)
+            if (audio_file_data.Length == 0)
             {
-                _errorMessage = "Ошибка чтения файла. Файл может быть поврежден.";
+                _errorMessageText = "Ошибка чтения файла. Файл может быть поврежден.";
                 return;
             }
 
-            _waveformData = await AudioService.GetWaveformDataAsync(audioData);
+            _waveformDataArray = await AudioService.GetWaveformDataAsync(audio_file_data);
             StateHasChanged();
 
-            if (_waveformData != null && _waveformData.Length > 0)
+            if (_waveformDataArray != null && _waveformDataArray.Length > 0)
             {
                 await DrawWaveformAsync();
             }
 
-            _analysisResult = await AudioService.AnalyzeAudioAsync(audioData, _selectedFileName);
+            _analysisResultText = await AudioService.AnalyzeAudioAsync(audio_file_data, _selectedFileName);
         }
         catch
         {
-            _errorMessage = "Ошибка при обработке файла. Пожалуйста, попробуйте другой файл.";
+            _errorMessageText = "Ошибка при обработке файла. Пожалуйста, попробуйте другой файл.";
         }
         finally
         {
-            _isProcessing = false;
+            _isProcessingFile = false;
             StateHasChanged();
         }
     }
 
-    private bool IsValidAudioFileExtension(string fileName)
+    private bool IsValidAudioFileExtension(string file_name)
     {
-        string extension = Path.GetExtension(fileName)?.ToLowerInvariant();
-        string[] validExtensions = { ".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a", ".wma" };
-        return validExtensions.Contains(extension);
+        string extension = Path.GetExtension(file_name)?.ToLowerInvariant() ?? string.Empty;
+        string[] valid_audio_extensions = { ".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a", ".wma" };
+        return valid_audio_extensions.Contains(extension);
     }
 
-    private string SanitizeFileName(string fileName)
+    private string SanitizeFileName(string original_file_name)
     {
-        char[] invalidChars = Path.GetInvalidFileNameChars();
-        string sanitized = new string(fileName.Where(ch => !invalidChars.Contains(ch)).ToArray());
-        return sanitized.Trim();
+        char[] invalid_file_name_characters = Path.GetInvalidFileNameChars();
+        string sanitized_file_name = new string(original_file_name.Where(character => !invalid_file_name_characters.Contains(character)).ToArray());
+        return sanitized_file_name.Trim();
     }
 
     private async Task DrawWaveformAsync()
     {
-        if (_waveformData == null || _waveformData.Length == 0)
+        if (_waveformDataArray == null || _waveformDataArray.Length == 0)
             return;
 
-        string json = System.Text.Json.JsonSerializer.Serialize(_waveformData);
-        await JSRuntime.InvokeVoidAsync("drawWaveform", _canvasRef, json);
+        string waveform_json = System.Text.Json.JsonSerializer.Serialize(_waveformDataArray);
+        await JSRuntime.InvokeVoidAsync("drawWaveform", _waveformCanvasReference, waveform_json);
     }
 }

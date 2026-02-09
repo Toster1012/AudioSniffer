@@ -14,43 +14,43 @@ public class SecurityLoggingMiddleware
         _logger = logger;
     }
 
-    public async Task InvokeAsync(HttpContext context)
+    public async Task InvokeAsync(HttpContext http_context)
     {
-        string _clientIpAddress = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        string _httpMethod = context.Request.Method;
-        string _requestPath = context.Request.Path;
-        string _queryString = context.Request.QueryString.ToString();
-        string _userAgent = context.Request.Headers.UserAgent.ToString();
+        string client_ip_address = http_context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        string http_method = http_context.Request.Method;
+        string request_path = http_context.Request.Path;
+        string query_string = http_context.Request.QueryString.ToString();
+        string user_agent = http_context.Request.Headers.UserAgent.ToString();
 
-        var _requestInformation = new
+        object request_information = new
         {
             Timestamp = DateTime.UtcNow,
-            ClientIp = _clientIpAddress,
-            Method = _httpMethod,
-            Path = _requestPath,
-            QueryString = _queryString,
-            UserAgent = _userAgent,
-            IsHttps = context.Request.IsHttps,
-            ContentType = context.Request.ContentType,
-            ContentLength = context.Request.ContentLength
+            ClientIp = client_ip_address,
+            Method = http_method,
+            Path = request_path,
+            QueryString = query_string,
+            UserAgent = user_agent,
+            IsHttps = http_context.Request.IsHttps,
+            ContentType = http_context.Request.ContentType,
+            ContentLength = http_context.Request.ContentLength
         };
 
-        _logger.LogInformation("Security Log: {RequestInfo}", JsonSerializer.Serialize(_requestInformation));
+        _logger.LogInformation("Security Log: {RequestInfo}", JsonSerializer.Serialize(request_information));
 
         try
         {
-            await _next(context);
+            await _next(http_context);
         }
-        catch (Exception exception)
+        catch (Exception caught_exception)
         {
-            _logger.LogError(exception, "Security Error: {ErrorMessage}", exception.Message);
+            _logger.LogError(caught_exception, "Security Error: {ErrorMessage}", caught_exception.Message);
             throw;
         }
 
-        if (context.Response.StatusCode >= 400)
+        if (http_context.Response.StatusCode >= 400)
         {
             _logger.LogWarning("Security Warning: Status {StatusCode} for {Path} from {ClientIp}",
-                context.Response.StatusCode, _requestPath, _clientIpAddress);
+                http_context.Response.StatusCode, request_path, client_ip_address);
         }
     }
 }

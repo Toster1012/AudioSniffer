@@ -1,0 +1,145 @@
+@page "/admin"
+@rendermode RenderMode.InteractiveServer
+@using AudioSniffer.Services
+@using AudioSniffer.Models
+@using System.Globalization
+@using Microsoft.JSInterop
+@inject IRequestHistoryService RequestHistoryService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Администратор - Статистика анализа аудио</PageTitle>
+
+<div class="admin-container">
+    <div class="admin-header">
+        <h1>Статистика анализа аудио</h1>
+        <p>Сравнение аудиофайлов, сгенерированных ИИ, с реальными аудиофайлами</p>
+    </div>
+
+    <div class="stats-overview">
+        <div class="stat-card">
+            <h3>Всего проанализировано файлов</h3>
+            <p class="stat-value">@_totalFilesCount</p>
+        </div>
+
+        <div class="stat-card">
+            <h3>Файлы, сгенерированные ИИ</h3>
+            <p class="stat-value generated">@_generatedFilesCount (@(_totalFilesCount > 0 ? Math.Round((double)_generatedFilesCount / _totalFilesCount * 100) : 0)%)</p>
+        </div>
+
+        <div class="stat-card">
+            <h3>Реальные файлы</h3>
+            <p class="stat-value real">@_realFilesCount (@(_totalFilesCount > 0 ? Math.Round((double)_realFilesCount / _totalFilesCount * 100) : 0)%)</p>
+        </div>
+    </div>
+
+    <div class="chart-container">
+        <canvas @ref="_chartCanvasReference" id="audioComparisonChart"></canvas>
+    </div>
+
+    <div class="recent-files">
+        <h2>Последние анализы</h2>
+        <table class="history-table">
+            <thead>
+                <tr>
+                    <th>Имя файла</th>
+                    <th>Тип</th>
+                    <th>Дата</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (RequestHistory history_item in _recentHistoryList)
+                {
+                    <tr>
+                        <td>@history_item.FileName</td>
+                        <td class="@(history_item.IsGenerated ? "generated" : "real")">
+                            @(history_item.IsGenerated ? "Сгенерировано ИИ" : "Реальное")
+                        </td>
+                        <td>@history_item.RequestDate.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private ElementReference _chartCanvasReference;
+    private List<RequestHistory> _fullHistoryList = new();
+    private List<RequestHistory> _recentHistoryList = new();
+    private int _totalFilesCount = 0;
+    private int _generatedFilesCount = 0;
+    private int _realFilesCount = 0;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            _fullHistoryList = await RequestHistoryService.GetRequestHistoryAsync();
+
+            _totalFilesCount = _fullHistoryList.Count;
+            _generatedFilesCount = _fullHistoryList.Count(history_item => history_item.IsGenerated);
+            _realFilesCount = _fullHistoryList.Count(history_item => !history_item.IsGenerated);
+
+            _recentHistoryList = _fullHistoryList
+                .OrderByDescending(history_item => history_item.RequestDate)
+                .Take(20)
+                .ToList();
+
+            await Task.Delay(100);
+            await InitializeChartAsync();
+        }
+        catch (Exception loading_exception)
+        {
+            _errorMessage = "Не удалось загрузить историю анализа: " + loading_exception.Message;
+        }
+        finally
+        {
+            StateHasChanged();
+        }
+    }
+
+    private async Task InitializeChartAsync()
+    {
+        if (_fullHistoryList.Count == 0)
+            return;
+
+        try
+        {
+            List<DailyStatistics> grouped_statistics = _fullHistoryList
+                .GroupBy(history_item => history_item.RequestDate.Date)
+                .OrderBy(date_group => date_group.Key)
+                .Select(date_group => new DailyStatistics
+                {
+                    Date = date_group.Key.ToString("yyyy-MM-dd"),
+                    Generated = date_group.Count(history_item => history_item.IsGenerated),
+                    Real = date_group.Count(history_item => !history_item.IsGenerated)
+                })
+                .ToList();
+
+            string[] date_labels = grouped_statistics.Select(stat => stat.Date).ToArray();
+            int[] generated_counts = grouped_statistics.Select(stat => stat.Generated).ToArray();
+            int[] real_counts = grouped_statistics.Select(stat => stat.Real).ToArray();
+
+            await JSRuntime.InvokeVoidAsync("createComparisonChart", _chartCanvasReference,
+                date_labels, generated_counts, real_counts);
+        }
+        catch (Exception chart_exception)
+        {
+            _errorMessage = "Не удалось инициализировать диаграмму: " + chart_exception.Message;
+        }
+    }
+
+    private class DailyStatistics
+    {
+        public string Date { get; set; } = string.Empty;
+        public int Generated { get; set; }
+        public int Real { get; set; }
+    }
+}

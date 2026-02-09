@@ -585,9 +585,6 @@ div[class*="circuit-error"] {
 }
 
 div:has-text("An unhandled error has occurred") {
-
-/* Target the specific error message text */
-div:has-text("An unhandled error has occurred") {
     display: none !important;
 }
 
@@ -595,11 +592,209 @@ div:has-text("Reload") {
     display: none !important;
 }
 
-/* Hide the error boundary container */
 div[role="alert"] {
     display: none !important;
 }
 
 div[aria-live="assertive"] {
     display: none !important;
+}
+
+.admin-container {
+    position: relative;
+    z-index: 1;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 24px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+}
+
+.admin-header {
+    text-align: center;
+    margin-bottom: 32px;
+    animation: fadeInUp 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.admin-header h1 {
+    font-size: 48px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    letter-spacing: -0.015em;
+}
+
+.admin-header p {
+    font-size: 20px;
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+.stats-overview {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+    margin-bottom: 32px;
+    animation: fadeInUp 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.1s backwards;
+}
+
+.stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    text-align: center;
+}
+
+.stat-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.stat-card h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    letter-spacing: 0.007em;
+}
+
+.stat-value {
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.1;
+}
+
+.stat-value.generated {
+    color: #ff6384;
+}
+
+.stat-value.real {
+    color: #36a2eb;
+}
+
+.chart-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 32px;
+    animation: fadeInUp 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.2s backwards;
+}
+
+.chart-container canvas {
+    width: 100% !important;
+    height: 400px !important;
+    max-height: 400px;
+}
+
+.recent-files {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    box-shadow: var(--shadow-sm);
+    animation: fadeInUp 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.3s backwards;
+}
+
+.recent-files h2 {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 24px;
+    letter-spacing: -0.011em;
+}
+
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.history-table th {
+    padding: 16px;
+    text-align: left;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+}
+
+.history-table td {
+    padding: 16px;
+    font-size: 15px;
+    color: var(--text-primary);
+    border-bottom: 1px solid rgba(210, 210, 217, 0.1);
+}
+
+.history-table tr:hover {
+    background: rgba(0, 113, 227, 0.05);
+}
+
+.history-table td.generated {
+    color: #ff6384;
+    font-weight: 600;
+}
+
+.history-table td.real {
+    color: #36a2eb;
+    font-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+    .history-table tr:hover {
+        background: rgba(0, 119, 237, 0.1);
+    }
+}
+
+@media (max-width: 768px) {
+    .admin-header h1 {
+        font-size: 36px;
+    }
+
+    .admin-header p {
+        font-size: 18px;
+    }
+
+    .stat-value {
+        font-size: 32px;
+    }
+
+    .chart-container canvas {
+        height: 300px !important;
+    }
+
+    .history-table th,
+    .history-table td {
+        padding: 12px 8px;
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .admin-container {
+        padding: 32px 16px;
+    }
+
+    .stats-overview {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .admin-header h1 {
+        font-size: 28px;
+    }
+
+    .stat-value {
+        font-size: 28px;
+    }
+
+    .chart-container canvas {
+        height: 250px !important;
+    }
 }

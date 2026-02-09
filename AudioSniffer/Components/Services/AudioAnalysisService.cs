@@ -17,125 +17,125 @@ public class AudioAnalysisService : IAudioAnalysisService
         _httpClient.Timeout = TimeSpan.FromMinutes(5); 
     }
 
-    public async Task<string> AnalyzeAudioAsync(byte[] audio, string fileName)
+    public async Task<string> AnalyzeAudioAsync(byte[] audio_data, string file_name)
     {
-        int _maxRetries = 3;
-        int _retryDelayMs = 2000;
+        int max_retry_attempts = 3;
+        int retry_delay_milliseconds = 2000;
 
         try
         {
-            for (int attempt = 1; attempt <= _maxRetries; attempt++)
+            for (int current_attempt = 1; current_attempt <= max_retry_attempts; current_attempt++)
             {
                 try
                 {
-                    using var _content = new MultipartFormDataContent();
-                    ByteArrayContent _fileContent = new ByteArrayContent(audio);
-                    _fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("audio/mpeg");
-                    _content.Add(_fileContent, "file", fileName);
+                    using MultipartFormDataContent request_content = new MultipartFormDataContent();
+                    ByteArrayContent file_content = new ByteArrayContent(audio_data);
+                    file_content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("audio/mpeg");
+                    request_content.Add(file_content, "file", file_name);
 
-                    var _response = await _httpClient.PostAsync("/analyze", _content);
+                    HttpResponseMessage backend_response = await _httpClient.PostAsync("/analyze", request_content);
 
-                    if (!_response.IsSuccessStatusCode)
+                    if (!backend_response.IsSuccessStatusCode)
                     {
-                        var _error = await _response.Content.ReadAsStringAsync();
-                        _logger.LogError("Backend error: {Error}", _error);
+                        string error_content = await backend_response.Content.ReadAsStringAsync();
+                        _logger.LogError("Backend error: {Error}", error_content);
                         return "Ошибка анализа аудио";
                     }
 
-                    var _resultJson = await _response.Content.ReadAsStringAsync();
-                    _logger.LogInformation("Backend response: {Response}", _resultJson);
+                    string result_json = await backend_response.Content.ReadAsStringAsync();
+                    _logger.LogInformation("Backend response: {Response}", result_json);
 
-                    var _result = JsonSerializer.Deserialize<AnalysisResponse>(_resultJson, new JsonSerializerOptions
+                    AnalysisResponse? parsed_result = JsonSerializer.Deserialize<AnalysisResponse>(result_json, new JsonSerializerOptions
                     {
                         PropertyNameCaseInsensitive = true
                     });
 
-                    float _overallConfidence = _result?.OverallConfidence ?? 0;
-                    bool _isSuspicious = _result?.IsSuspicious ?? false;
-                    _logger.LogInformation("Parsed values - Confidence: {Confidence}, IsSuspicious: {IsSuspicious}", _overallConfidence, _isSuspicious);
+                    float overall_confidence = parsed_result?.OverallConfidence ?? 0;
+                    bool is_suspicious = parsed_result?.IsSuspicious ?? false;
+                    _logger.LogInformation("Parsed values - Confidence: {Confidence}, IsSuspicious: {IsSuspicious}", overall_confidence, is_suspicious);
 
-                    if (_isSuspicious)
+                    if (is_suspicious)
                     {
-                        if (_overallConfidence >= 0.9f)
-                            return $"Аудио сгенерировано нейросетью, с вероятностью: {_overallConfidence:P0}";
-                        else if (_overallConfidence >= 0.7f)
-                            return $"Аудио вероятно сгенерировано нейросетью, с шансом: {_overallConfidence:P0}";
+                        if (overall_confidence >= 0.9f)
+                            return $"Аудио сгенерировано нейросетью, с вероятностью: {overall_confidence:P0}";
+                        else if (overall_confidence >= 0.7f)
+                            return $"Аудио вероятно сгенерировано нейросетью, с шансом: {overall_confidence:P0}";
                         else 
-                            return $"Аудио возможно сгенерировано нейросетью, с шансом: {_overallConfidence:P0}";
+                            return $"Аудио возможно сгенерировано нейросетью, с шансом: {overall_confidence:P0}";
                     }
                     else
                     {
-                        return $"Аудио врядли сгенерировано нейросетью, вероятность генерации: {_overallConfidence:P0}";
+                        return $"Аудио врядли сгенерировано нейросетью, вероятность генерации: {overall_confidence:P0}";
                     }
                 }
-                catch (HttpRequestException ex) when (attempt < _maxRetries)
+                catch (HttpRequestException http_exception) when (current_attempt < max_retry_attempts)
                 {
-                    _logger.LogWarning(ex, "Connection attempt {Attempt}/{MaxRetries} failed, retrying...", attempt, _maxRetries);
-                    await Task.Delay(_retryDelayMs);
+                    _logger.LogWarning(http_exception, "Connection attempt {Attempt}/{MaxRetries} failed, retrying...", current_attempt, max_retry_attempts);
+                    await Task.Delay(retry_delay_milliseconds);
                 }
             }
         }
-        catch (HttpRequestException httpRequestException)
+        catch (HttpRequestException http_request_exception)
         {
-            _logger.LogError(httpRequestException, "HTTP error while analyzing audio after {MaxRetries} attempts: {FileName}", _maxRetries, fileName);
+            _logger.LogError(http_request_exception, "HTTP error while analyzing audio after {MaxRetries} attempts: {FileName}", max_retry_attempts, file_name);
             return "Не удалось подключиться к серверу анализа. Проверьте, что бэкенд запущен на localhost:5000";
         }
-        catch (Exception exception)
+        catch (Exception processing_exception)
         {
-            _logger.LogError(exception, "Error analyzing audio file: {FileName}", fileName);
+            _logger.LogError(processing_exception, "Error analyzing audio file: {FileName}", file_name);
             return "Ошибка при обработке аудио";
         }
 
         return "Не удалось подключиться к серверу анализа. Проверьте, что бэкенд запущен на localhost:5000";
     }
 
-    public async Task<float[]> GetWaveformDataAsync(byte[] audio)
+    public async Task<float[]> GetWaveformDataAsync(byte[] audio_data)
     {
         try
         {
             await Task.Delay(100);
 
-            List<float> _samples = new List<float>();
-            int _sampleCount = 200;
-            int _stepSize = Math.Max(1, audio.Length / _sampleCount);
+            List<float> audio_samples = new List<float>();
+            int target_sample_count = 200;
+            int step_size = Math.Max(1, audio_data.Length / target_sample_count);
 
-            for (int i = 0; i < audio.Length; i += _stepSize)
+            for (int byte_index = 0; byte_index < audio_data.Length; byte_index += step_size)
             {
-                if (_samples.Count >= _sampleCount)
+                if (audio_samples.Count >= target_sample_count)
                     break;
 
-                float _sum = 0;
-                int _count = 0;
+                float sample_sum = 0;
+                int sample_count = 0;
 
-                for (int j = i; j < Math.Min(i + _stepSize, audio.Length); j++)
+                for (int offset = byte_index; offset < Math.Min(byte_index + step_size, audio_data.Length); offset++)
                 {
-                    float _value = (audio[j] - 128) / 128f;
-                    _sum += Math.Abs(_value);
-                    _count++;
+                    float normalized_value = (audio_data[offset] - 128) / 128f;
+                    sample_sum += Math.Abs(normalized_value);
+                    sample_count++;
                 }
 
-                float _avgAmplitude = _count > 0 ? _sum / _count : 0;
-                _samples.Add(_avgAmplitude * (i % 2 == 0 ? 1f : -1f));
+                float average_amplitude = sample_count > 0 ? sample_sum / sample_count : 0;
+                audio_samples.Add(average_amplitude * (byte_index % 2 == 0 ? 1f : -1f));
             }
 
-            if (_samples.Count > 0)
+            if (audio_samples.Count > 0)
             {
-                float _maxValue = _samples.Max(s => Math.Abs(s));
+                float max_sample_value = audio_samples.Max(sample => Math.Abs(sample));
 
-                if (_maxValue > 0)
+                if (max_sample_value > 0)
                 {
-                    for (int i = 0; i < _samples.Count; i++)
+                    for (int sample_index = 0; sample_index < audio_samples.Count; sample_index++)
                     {
-                        _samples[i] /= _maxValue;
+                        audio_samples[sample_index] /= max_sample_value;
                     }
                 }
             }
 
-            return _samples.ToArray();
+            return audio_samples.ToArray();
         }
-        catch (Exception exception)
+        catch (Exception waveform_exception)
         {
-            _logger.LogError(exception, "Error extracting waveform data");
+            _logger.LogError(waveform_exception, "Error extracting waveform data");
             throw;
         }
     }
