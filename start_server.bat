@@ -1,6 +1,6 @@
 @echo off
-title AudioSniffer Full System Launcher
-echo Starting AudioSniffer Full System...
+title AudioSniffer System Launcher
+echo Starting AudioSniffer System...
 echo ==================================
 
 REM Check if we're running from the correct directory
