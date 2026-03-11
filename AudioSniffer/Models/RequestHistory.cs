@@ -1,21 +1,29 @@
-using System;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
-namespace AudioSniffer.Models
+namespace AudioSniffer.Models;
+
+public sealed class RequestHistory
 {
-    public class RequestHistory
-    {
-        [Key]
-        public int Id { get; set; }
+    [Key]
+    public Guid Id { get; init; } = Guid.NewGuid();
 
-        [Required]
-        [StringLength(255)]
-        public string FileName { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 
-        [Required]
-        public bool IsGenerated { get; set; }
+    [Required]
+    public string AudioFileId { get; init; } = string.Empty;
 
-        [Required]
-        public DateTime RequestDate { get; set; } = DateTime.UtcNow;
-    }
+    public float OverallConfidence { get; init; }
+
+    public bool IsNeuralNetwork { get; init; }
+
+    [Required]
+    public string DetectionsJson { get; init; } = string.Empty;
+
+    public float DurationSeconds { get; init; }
+
+    public int SampleRate { get; init; }
+
+    public string Format { get; init; } = string.Empty;
 }

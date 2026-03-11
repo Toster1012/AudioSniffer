@@ -1,29 +1,40 @@
-using AudioSniffer.Models;
 using Microsoft.EntityFrameworkCore;
+using AudioSniffer.Models;
 
-namespace AudioSniffer.Data
+namespace AudioSniffer.Data;
+
+public sealed class ApplicationDbContext : DbContext
 {
-    public class ApplicationDbContext : DbContext
+    public DbSet<RequestHistory> RequestHistories { get; set; }
+
+    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+        : base(options) { }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        public ApplicationDbContext(DbContextOptions<ApplicationDbContext> database_options)
-            : base(database_options)
-        {
-        }
+        modelBuilder.Entity<RequestHistory>().HasKey(r => r.Id);
 
-        public DbSet<RequestHistory> RequestHistories { get; set; }
+        modelBuilder.Entity<RequestHistory>()
+            .Property(r => r.AudioFileId)
+            .IsRequired();
 
-        protected override void OnModelCreating(ModelBuilder model_builder)
-        {
-            base.OnModelCreating(model_builder);
+        modelBuilder.Entity<RequestHistory>()
+            .Property(r => r.OverallConfidence);
 
-            // Configure RequestHistory entity
-            model_builder.Entity<RequestHistory>(entity =>
-            {
-                entity.HasKey(history_entity => history_entity.Id);
-                entity.Property(history_entity => history_entity.FileName).IsRequired().HasMaxLength(255);
-                entity.Property(history_entity => history_entity.IsGenerated).IsRequired();
-                entity.Property(history_entity => history_entity.RequestDate).IsRequired();
-            });
-        }
+        modelBuilder.Entity<RequestHistory>()
+            .Property(r => r.IsNeuralNetwork);
+
+        modelBuilder.Entity<RequestHistory>()
+            .Property(r => r.DetectionsJson)
+            .IsRequired();
+
+        modelBuilder.Entity<RequestHistory>()
+            .Property(r => r.DurationSeconds);
+
+        modelBuilder.Entity<RequestHistory>()
+            .Property(r => r.SampleRate);
+
+        modelBuilder.Entity<RequestHistory>()
+            .Property(r => r.Format);
     }
 }

@@ -1,43 +1,67 @@
+using Microsoft.EntityFrameworkCore;
 using AudioSniffer.Data;
 using AudioSniffer.Models;
-using Microsoft.EntityFrameworkCore;
-using System.Threading.Tasks;
+using System.Text.Json;
 
-namespace AudioSniffer.Services
+namespace AudioSniffer.Services;
+
+public sealed class RequestHistoryService : IRequestHistoryService
 {
-    public interface IRequestHistoryService
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
+    private readonly ILogger<RequestHistoryService> _logger;
+
+    public RequestHistoryService(
+        IDbContextFactory<ApplicationDbContext> dbFactory,
+        ILogger<RequestHistoryService> logger)
     {
-        Task AddRequestHistoryAsync(string fileName, bool isGenerated);
-        Task<List<RequestHistory>> GetRequestHistoryAsync();
+        _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public class RequestHistoryService : IRequestHistoryService
+    public async Task SaveAnalysisAsync(AnalysisResult result)
     {
-        private readonly ApplicationDbContext _database_context;
+        ArgumentNullException.ThrowIfNull(result);
 
-        public RequestHistoryService(ApplicationDbContext database_context)
+        _logger.LogInformation("Попытка сохранения анализа для {AudioFileId}", result.AudioFileId);
+
+        await using var context = await _dbFactory.CreateDbContextAsync();
+
+        var history = new RequestHistory
         {
-            _database_context = database_context;
-        }
+            AudioFileId = result.AudioFileId,
+            OverallConfidence = result.OverallConfidence,
+            IsNeuralNetwork = result.IsNeuralNetwork,
+            DetectionsJson = JsonSerializer.Serialize(result.Detections),
+            DurationSeconds = result.Metadata.DurationSeconds,
+            SampleRate = result.Metadata.SampleRate,
+            Format = result.Metadata.Format
+        };
 
-        public async Task AddRequestHistoryAsync(string file_name, bool is_generated)
+        context.RequestHistories.Add(history);
+
+        try
         {
-            RequestHistory history_entry = new RequestHistory
-            {
-                FileName = file_name,
-                IsGenerated = is_generated,
-                RequestDate = DateTime.UtcNow
-            };
-
-            _database_context.RequestHistories.Add(history_entry);
-            await _database_context.SaveChangesAsync();
+            var count = await context.SaveChangesAsync();
+            _logger.LogInformation("Сохранено {Count} записей для {AudioFileId}", count, result.AudioFileId);
         }
-
-        public async Task<List<RequestHistory>> GetRequestHistoryAsync()
+        catch (Exception ex)
         {
-            return await _database_context.RequestHistories
-                .OrderByDescending(history_record => history_record.RequestDate)
-                .ToListAsync();
+            _logger.LogError(ex, "Ошибка при сохранении анализа для {AudioFileId}", result.AudioFileId);
+            throw;
         }
+    }
+
+    public async Task<List<RequestHistory>> GetAllAsync()
+    {
+        await using var context = await _dbFactory.CreateDbContextAsync();
+
+        var items = await context.RequestHistories
+            .OrderByDescending(h => h.CreatedAt)
+            .AsNoTracking()
+            .ToListAsync();
+
+        _logger.LogInformation("Получено {Count} записей из истории", items.Count);
+
+        return items;
     }
 }

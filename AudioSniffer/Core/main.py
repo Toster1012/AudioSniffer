@@ -7,7 +7,10 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from app.models import AnalysisResult, HealthResponse
+import librosa
+import numpy as np
+
+from app.models import AnalysisResult, AudioMetadata, DetectionResult, DetectorType, TimeMarker
 from app.detectors.silence_detector import SilenceDetector
 from app.detectors.pitch_detector import PitchDetector
 from app.detectors.splice_detector import SpliceDetector
@@ -33,24 +36,21 @@ app.add_middleware(
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-
-@app.get("/", response_model=HealthResponse)
+@app.get("/")
 async def root():
-    return HealthResponse()
+    return {"status": "healthy", "version": "1.0.0", "detectors": ["silence", "pitch", "splice"]}
 
-
-@app.get("/health", response_model=HealthResponse)
+@app.get("/health")
 async def health_check():
-    return HealthResponse(status="healthy", version="1.0.0")
+    return {"status": "healthy", "version": "1.0.0", "detectors": ["silence", "pitch", "splice"]}
 
-
-@app.post("/analyze", response_model=AnalysisResult)
+@app.post("/analyze")
 async def analyze_audio(
         file: UploadFile = File(...),
         audio_file_id: Optional[str] = Form(None)
 ):
     if audio_file_id is None:
-        audio_file_id = f"audio_{datetime.utcnow().timestamp()}"
+        audio_file_id = f"audio_{datetime.utcnow().timestamp():.0f}"
 
     temp_file = None
 
@@ -58,8 +58,8 @@ async def analyze_audio(
         if file.size and file.size > 50 * 1024 * 1024:
             raise HTTPException(status_code=400, detail="File too large. Max 50 MB")
 
-        suffix = Path(file.filename or "audio.wav").suffix
-        if suffix.lower() not in AudioProcessor.SUPPORTED_FORMATS:
+        suffix = Path(file.filename or "audio.wav").suffix.lower()
+        if suffix not in AudioProcessor.SUPPORTED_FORMATS:
             raise HTTPException(status_code=400, detail="Unsupported format")
 
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
@@ -92,25 +92,96 @@ async def analyze_audio(
         splice_result = splice_detector.analyze(temp_file.name)
 
         detections = [silence_result, pitch_result, splice_result]
-        overall_confidence = sum(d.confidence for d in detections) / len(detections)
-        is_suspicious = overall_confidence > 0.5
+
+        audio_data, sample_rate = librosa.load(temp_file.name, sr=None)
+
+        mfcc = librosa.feature.mfcc(y=audio_data, sr=sample_rate, n_mfcc=13)
+        mfcc_variance = float(np.var(mfcc, axis=1).mean())
+
+        spectral_centroid = librosa.feature.spectral_centroid(y=audio_data, sr=sample_rate)
+        spectral_centroid_mean = float(spectral_centroid.mean())
+        spectral_centroid_variance = float(np.var(spectral_centroid))
+
+        zero_crossing_rate = librosa.feature.zero_crossing_rate(y=audio_data)
+        zero_crossing_mean = float(zero_crossing_rate.mean())
+
+        spectral_rolloff = librosa.feature.spectral_rolloff(y=audio_data, sr=sample_rate)
+        spectral_rolloff_mean = float(spectral_rolloff.mean())
+
+        spectral_flatness = librosa.feature.spectral_flatness(y=audio_data)
+        spectral_flatness_mean = float(spectral_flatness.mean())
+
+        rms = librosa.feature.rms(y=audio_data)
+        rms_variance = float(np.var(rms))
+
+        harmonic, percussive = librosa.effects.hpss(y=audio_data)
+        harmonic_ratio = float(np.mean(np.abs(harmonic)) / (np.mean(np.abs(harmonic)) + np.mean(np.abs(percussive)) + 1e-8))
+
+        pitch_variance = 0.0
+        try:
+            fundamental_frequency, voiced_flag, _ = librosa.pyin(
+                y=audio_data,
+                fmin=librosa.note_to_hz('C2'),
+                fmax=librosa.note_to_hz('C7'),
+                sr=sample_rate
+            )
+            voiced_f0 = fundamental_frequency[voiced_flag]
+            if len(voiced_f0) > 0:
+                pitch_variance = float(np.var(voiced_f0))
+        except Exception:
+            pass
+
+        feature_based_ai_score = 0.0
+        if mfcc_variance < 150.0:
+            feature_based_ai_score += 0.15
+        if spectral_centroid_mean < 2000.0:
+            feature_based_ai_score += 0.15
+        if spectral_centroid_variance < 80000.0:
+            feature_based_ai_score += 0.10
+        if zero_crossing_mean < 0.07:
+            feature_based_ai_score += 0.10
+        if spectral_rolloff_mean < 5000.0:
+            feature_based_ai_score += 0.10
+        if spectral_flatness_mean > 0.25:
+            feature_based_ai_score += 0.08
+        if rms_variance < 0.008:
+            feature_based_ai_score += 0.12
+        if harmonic_ratio > 0.82:
+            feature_based_ai_score += 0.10
+        if pitch_variance < 120.0:
+            feature_based_ai_score += 0.10
+
+        silence_weight = 0.22
+        pitch_weight = 0.28
+        splice_weight = 0.22
+        feature_weight = 0.28
+
+        overall_confidence = (
+            silence_result.confidence * silence_weight +
+            pitch_result.confidence * pitch_weight +
+            splice_result.confidence * splice_weight +
+            feature_based_ai_score * feature_weight
+        )
+        overall_confidence = min(1.0, max(0.0, overall_confidence))
+
+        is_neural_network = overall_confidence > 0.58
 
         return AnalysisResult(
             audio_file_id=audio_file_id,
             overall_confidence=overall_confidence,
-            is_suspicious=is_suspicious,
+            is_neural_network=is_neural_network,
             detections=detections,
             metadata=metadata
         )
 
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Analysis error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+    except Exception as analysis_exception:
+        logger.error(f"Analysis error: {analysis_exception}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(analysis_exception)}")
     finally:
         if temp_file and os.path.exists(temp_file.name):
             try:
                 os.unlink(temp_file.name)
-            except Exception as e:
-                logger.error(f"Cannot delete temp file: {e}")
+            except Exception as cleanup_exception:
+                logger.error(f"Cannot delete temp file: {cleanup_exception}")

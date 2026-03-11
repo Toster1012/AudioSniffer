@@ -1,55 +1,40 @@
+using Microsoft.EntityFrameworkCore;
 using AudioSniffer.Data;
 using AudioSniffer.Models;
 using AudioSniffer.Services;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
-namespace AudioSniffer
+namespace AudioSniffer;
+
+public static class TestDatabaseIntegration
 {
-    public class TestDatabaseIntegration
+    public static async Task RunTestAsync(IDbContextFactory<ApplicationDbContext> dbFactory)
     {
-        public static async Task TestAsync()
+        var testResult = new AnalysisResult
         {
-            // Настройка сервисов
-            IServiceCollection service_collection = new ServiceCollection();
-
-            // Настройка контекста базы данных
-            service_collection.AddDbContext<ApplicationDbContext>(database_options =>
-                database_options.UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=AudioSnifferRequestHistory;Trusted_Connection=True;MultipleActiveResultSets=true"));
-
-            // Регистрация сервиса истории запросов
-            service_collection.AddScoped<IRequestHistoryService, RequestHistoryService>();
-
-            ServiceProvider service_provider = service_collection.BuildServiceProvider();
-
-            try
+            AudioFileId = "test_2026",
+            OverallConfidence = 0.85f,
+            IsNeuralNetwork = true,
+            Detections = new List<DetectionResult>(),
+            Metadata = new AudioMetadata
             {
-                // Получение сервиса истории запросов
-                IRequestHistoryService history_service = service_provider.GetRequiredService<IRequestHistoryService>();
-
-                Console.WriteLine("Тестирование сервиса истории запросов...");
-
-                // Добавление тестовых записей
-                await history_service.AddRequestHistoryAsync("test1.wav", true);
-                await history_service.AddRequestHistoryAsync("test2.mp3", false);
-                await history_service.AddRequestHistoryAsync("test3.aac", true);
-
-                Console.WriteLine("Добавлено 3 записи в историю запросов.");
-
-                // Получение истории запросов
-                List<RequestHistory> history_list = await history_service.GetRequestHistoryAsync();
-
-                Console.WriteLine($"Получено {history_list.Count} записей из истории:");
-                foreach (RequestHistory history_item in history_list)
-                {
-                    Console.WriteLine($"- {history_item.FileName} (Сгенерирован: {history_item.IsGenerated}, Дата: {history_item.RequestDate})");
-                }
-
-                Console.WriteLine("Тестирование успешно завершено!");
+                DurationSeconds = 30.5f,
+                SampleRate = 44100,
+                Channels = 2,
+                Format = "wav"
             }
-            catch (Exception caught_exception)
-            {
-                Console.WriteLine($"Ошибка при тестировании: {caught_exception.Message}");
-            }
-        }
+        };
+
+        var nullLogger = NullLogger<RequestHistoryService>.Instance;
+
+        IRequestHistoryService service = new RequestHistoryService(dbFactory, nullLogger);
+
+        await service.SaveAnalysisAsync(testResult);
+
+        await using var context = await dbFactory.CreateDbContextAsync();
+        var histories = await context.RequestHistories.ToListAsync();
+
+        Console.WriteLine($"Сохранено записей: {histories.Count}");
     }
 }
