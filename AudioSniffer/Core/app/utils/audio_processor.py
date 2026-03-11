@@ -35,7 +35,6 @@ class AudioProcessor:
 
     @staticmethod
     def validate_audio_file(file_path: str) -> tuple[bool, str]:
-
         path = Path(file_path)
 
         if not path.exists():
@@ -43,12 +42,11 @@ class AudioProcessor:
             return False, "Файл не найден"
 
         if path.suffix.lower() not in AudioProcessor.SUPPORTED_FORMATS:
-            print(f"Validation failed: Unsupported format - {path.suffix}. Supported: {AudioProcessor.SUPPORTED_FORMATS}")
-            return False, f"Неподдерживаемый формат. Разрешены: {', '.join(AudioProcessor.SUPPORTED_FORMATS)}"
+            print(f"Validation failed: Unsupported format - {path.suffix}")
+            return False, f"Неподдерживаемый формат. Разрешены: {', '.join(sorted(AudioProcessor.SUPPORTED_FORMATS))}"
 
         file_size_mb = path.stat().st_size / (1024 * 1024)
         if file_size_mb > AudioProcessor.MAX_FILE_SIZE_MB:
-            print(f"Validation failed: File too large - {file_size_mb:.1f} MB. Max: {AudioProcessor.MAX_FILE_SIZE_MB} MB")
             return False, f"Файл слишком большой ({file_size_mb:.1f} MB). Максимум {AudioProcessor.MAX_FILE_SIZE_MB} MB"
 
         print(f"Validation passed for file: {file_path}")
@@ -60,20 +58,20 @@ class AudioProcessor:
         fmt = path.suffix.lower()
 
         if fmt not in FORMATS_NEEDING_CONVERSION:
-            y, sr = librosa.load(file_path, sr=None)
+            y, sr = librosa.load(file_path, sr=None, mono=True)
             return y, sr
 
         ffmpeg_path = find_ffmpeg()
 
         if ffmpeg_path is None:
-            print(f"ffmpeg not found in PATH or common locations, trying librosa direct for {fmt}")
+            print(f"ffmpeg not found, trying librosa direct load for {fmt}")
             try:
-                y, sr = librosa.load(file_path, sr=None)
+                y, sr = librosa.load(file_path, sr=None, mono=True)
                 return y, sr
             except Exception as e:
                 raise RuntimeError(
-                    f"Не удалось загрузить {fmt}: установите ffmpeg (https://ffmpeg.org/download.html) "
-                    f"и добавьте в PATH"
+                    f"Не удалось загрузить {fmt}: ffmpeg не найден. "
+                    f"Установите ffmpeg: https://ffmpeg.org/download.html"
                 ) from e
 
         print(f"Using ffmpeg at: {ffmpeg_path}")
@@ -82,7 +80,7 @@ class AudioProcessor:
 
         try:
             result = subprocess.run(
-                [ffmpeg_path, '-y', '-i', file_path, wav_tmp.name],
+                [ffmpeg_path, '-y', '-i', file_path, '-ar', '44100', '-ac', '1', wav_tmp.name],
                 capture_output=True,
                 timeout=60
             )
@@ -91,7 +89,7 @@ class AudioProcessor:
                 print(f"ffmpeg stderr: {stderr}")
                 raise RuntimeError(f"ffmpeg не смог сконвертировать {fmt} в WAV")
 
-            y, sr = librosa.load(wav_tmp.name, sr=None)
+            y, sr = librosa.load(wav_tmp.name, sr=None, mono=True)
             return y, sr
         finally:
             if os.path.exists(wav_tmp.name):
@@ -99,7 +97,6 @@ class AudioProcessor:
 
     @staticmethod
     def extract_metadata(file_path: str) -> AudioMetadata:
-
         y, sr = AudioProcessor.load_audio(file_path)
         duration = librosa.get_duration(y=y, sr=sr)
 
@@ -112,15 +109,14 @@ class AudioProcessor:
         fmt = Path(file_path).suffix[1:].lower()
 
         return AudioMetadata(
-            duration_seconds=duration,
-            sample_rate=sr,
-            channels=channels,
+            duration_seconds=float(duration),
+            sample_rate=int(sr),
+            channels=int(channels),
             format=fmt
         )
 
     @staticmethod
     def convert_to_wav(input_path: str, output_path: str) -> bool:
-
         try:
             y, sr = AudioProcessor.load_audio(input_path)
             sf.write(output_path, y, sr)
