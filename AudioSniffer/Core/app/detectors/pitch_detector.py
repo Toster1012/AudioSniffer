@@ -3,6 +3,7 @@ import numpy as np
 from scipy import stats
 from typing import List
 from app.models import DetectionResult, TimeMarker, DetectorType
+from app.utils.audio_processor import AudioProcessor
 
 
 class PitchDetector:
@@ -17,7 +18,7 @@ class PitchDetector:
 
     def analyze(self, audio_path: str) -> DetectionResult:
 
-        y, sr = librosa.load(audio_path, sr=None)
+        y, sr = AudioProcessor.load_audio(audio_path)
 
         pitches, magnitudes = librosa.piptrack(
             y=y,

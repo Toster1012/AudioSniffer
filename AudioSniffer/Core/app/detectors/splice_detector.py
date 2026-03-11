@@ -2,6 +2,7 @@ import librosa
 import numpy as np
 from typing import List
 from app.models import DetectionResult, TimeMarker, DetectorType
+from app.utils.audio_processor import AudioProcessor
 
 
 class SpliceDetector:
@@ -16,7 +17,7 @@ class SpliceDetector:
 
     def analyze(self, audio_path: str) -> DetectionResult:
 
-        y, sr = librosa.load(audio_path, sr=None)
+        y, sr = AudioProcessor.load_audio(audio_path)
 
         stft = librosa.stft(y, n_fft=self.n_fft, hop_length=self.hop_length)
         magnitude = np.abs(stft)

@@ -1,9 +1,10 @@
-﻿@page "/"
+@page "/"
 @rendermode RenderMode.InteractiveServer
 @using AudioSniffer.Services
 @using System.IO
 @using System.Linq
 @inject IAudioAnalysisService AudioService
+@inject IRequestHistoryService HistoryService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>AudioSniffer - Анализ аудио</PageTitle>
@@ -28,7 +29,7 @@
                 OnChange="HandleFileSelectedAsync"
                 class="file-input"
                 id="fileInput"
-                accept="audio/*"
+                accept=".mp3,.wav,.ogg,.aac,.flac,.m4a"
                 disabled="@_isProcessingFile" />
 
             <label for="fileInput" class="neon-button @(_isProcessingFile ? "disabled" : "")">
@@ -87,6 +88,8 @@
 </div>
 
 @code {
+    private static readonly string[] AllowedExtensions = { ".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a" };
+
     private ElementReference _waveformCanvasReference;
     private string? _selectedFileName;
     private string? _analysisResultText;
@@ -119,17 +122,10 @@
         }
 
         string file_extension = Path.GetExtension(selected_file.Name)?.ToLowerInvariant() ?? string.Empty;
-        string[] allowed_audio_extensions = { ".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a", ".wma" };
 
-        if (string.IsNullOrEmpty(file_extension) || !allowed_audio_extensions.Contains(file_extension))
+        if (string.IsNullOrEmpty(file_extension) || !AllowedExtensions.Contains(file_extension))
         {
-            _errorMessageText = "Неверный формат файла. Разрешены только аудиофайлы (MP3, WAV, OGG, AAC, FLAC, M4A, WMA).";
-            return;
-        }
-
-        if (!IsValidAudioFileExtension(selected_file.Name))
-        {
-            _errorMessageText = "Неверное расширение файла. Пожалуйста, загрузите действительный аудиофайл.";
+            _errorMessageText = $"Неверный формат файла. Разрешены: {string.Join(", ", AllowedExtensions).ToUpper()}";
             return;
         }
 
@@ -158,7 +154,13 @@
                 await DrawWaveformAsync();
             }
 
-            _analysisResultText = await AudioService.AnalyzeAudioAsync(audio_file_data, _selectedFileName);
+            var (result_text, analysis_result) = await AudioService.AnalyzeAudioAsync(audio_file_data, _selectedFileName);
+            _analysisResultText = result_text;
+
+            if (analysis_result != null)
+            {
+                await HistoryService.SaveAnalysisAsync(analysis_result);
+            }
         }
         catch
         {
@@ -169,13 +171,6 @@
             _isProcessingFile = false;
             StateHasChanged();
         }
-    }
-
-    private bool IsValidAudioFileExtension(string file_name)
-    {
-        string extension = Path.GetExtension(file_name)?.ToLowerInvariant() ?? string.Empty;
-        string[] valid_audio_extensions = { ".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a", ".wma" };
-        return valid_audio_extensions.Contains(extension);
     }
 
     private string SanitizeFileName(string original_file_name)

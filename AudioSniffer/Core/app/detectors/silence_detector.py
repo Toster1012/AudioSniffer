@@ -2,6 +2,7 @@ import librosa
 import numpy as np
 from typing import List
 from app.models import DetectionResult, TimeMarker, DetectorType
+from app.utils.audio_processor import AudioProcessor
 
 
 class SilenceDetector:
@@ -16,7 +17,7 @@ class SilenceDetector:
 
     def analyze(self, audio_path: str) -> DetectionResult:
 
-        y, sr = librosa.load(audio_path, sr=None)
+        y, sr = AudioProcessor.load_audio(audio_path)
 
         intervals = librosa.effects.split(y, top_db=self.top_db)
 
