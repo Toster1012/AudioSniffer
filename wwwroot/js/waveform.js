@@ -222,10 +222,6 @@ window.createComparisonChart = function(canvas, dates, generatedCounts, realCoun
         }
     });
 };
-
-// ============================================================
-// Spectrogram renderer
-// ============================================================
 window.drawSpectrogram = function(canvas, dataJson) {
     const data = JSON.parse(dataJson);
     if (!data || !data.magnitudes || data.magnitudes.length === 0) return;
@@ -250,8 +246,6 @@ window.drawSpectrogram = function(canvas, dataJson) {
 
     const W = containerWidth;
     const H = containerHeight;
-
-    // Draw spectrogram pixel by pixel using ImageData
     const imageData = ctx.createImageData(W, H);
     const pixData = imageData.data;
 
@@ -266,8 +260,6 @@ window.drawSpectrogram = function(canvas, dataJson) {
             const val = magnitudes[mel][frame]; // 0..1
             const x0 = Math.floor(frame * cellW);
             const x1 = Math.floor((frame + 1) * cellW);
-
-            // Plasma colormap
             const [r, g, b] = plasmaColor(val);
 
             for (let py = y0; py < y1 && py < H; py++) {
@@ -283,8 +275,6 @@ window.drawSpectrogram = function(canvas, dataJson) {
     }
 
     ctx.putImageData(imageData, 0, 0);
-
-    // Overlay suspicious regions
     if (times.length > 0 && suspiciousRegions.length > 0) {
         const totalDuration = times[times.length - 1];
 
@@ -292,25 +282,17 @@ window.drawSpectrogram = function(canvas, dataJson) {
             const xStart = (region.start / totalDuration) * W;
             const xEnd   = (region.end   / totalDuration) * W;
             const regionW = Math.max(xEnd - xStart, 3);
-
-            // Semi-transparent red overlay
             ctx.fillStyle = `rgba(255, 50, 50, ${0.25 + region.intensity * 0.35})`;
             ctx.fillRect(xStart, 0, regionW, H);
-
-            // Red border
             ctx.strokeStyle = 'rgba(255, 80, 80, 0.9)';
             ctx.lineWidth = 2;
             ctx.strokeRect(xStart, 0, regionW, H);
-
-            // Label
             ctx.fillStyle = 'rgba(255,255,255,0.95)';
             ctx.font = 'bold 10px monospace';
             const label = `⚠ ${region.start.toFixed(1)}s`;
             ctx.fillText(label, xStart + 3, 14);
         });
     }
-
-    // Time axis labels
     if (times.length > 0) {
         ctx.fillStyle = 'rgba(255,255,255,0.7)';
         ctx.font = '10px monospace';
@@ -323,11 +305,8 @@ window.drawSpectrogram = function(canvas, dataJson) {
         }
     }
 };
-
-// Plasma colormap (matplotlib-like, 256 levels)
 function plasmaColor(t) {
     t = Math.max(0, Math.min(1, t));
-    // Approximation of matplotlib's plasma
     const r = Math.round(255 * (0.05 + 0.95 * Math.pow(t, 0.55)));
     const g = Math.round(255 * (0.00 + 0.80 * Math.pow(t, 1.20)));
     const b = Math.round(255 * (0.55 - 0.55 * Math.pow(t, 0.60)));

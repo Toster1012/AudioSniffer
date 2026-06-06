@@ -15,8 +15,6 @@ public sealed class AnalysisResult
 
     [JsonPropertyName("is_suspicious")]
     public bool IsSuspicious { get; init; }
-
-    // Legacy alias — бэкенд может вернуть is_suspicious или is_neural_network
     [JsonPropertyName("is_neural_network")]
     public bool IsNeuralNetwork { get; init; }
 

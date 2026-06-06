@@ -25,19 +25,19 @@
         </h1>
         <p class="subtitle">Определяет, создано ли аудио с помощью ИИ</p>
 
-        <!-- Upload mode selector -->
+        
         <div class="mode-selector">
             <button class="mode-btn @(_uploadMode == "single" ? "active" : "")"
                     @onclick='() => _uploadMode = "single"'>
-                🎵 Один файл
+                 Один файл
             </button>
             <button class="mode-btn @(_uploadMode == "zip" ? "active" : "")"
                     @onclick='() => _uploadMode = "zip"'>
-                📦 ZIP-архив
+                 ZIP-архив
             </button>
         </div>
 
-        <!-- Single file upload -->
+        
         @if (_uploadMode == "single")
         {
             <div class="upload-section">
@@ -65,7 +65,7 @@
             </div>
         }
 
-        <!-- ZIP upload -->
+        
         @if (_uploadMode == "zip")
         {
             <div class="upload-section">
@@ -94,7 +94,7 @@
             <p class="zip-hint">ZIP может содержать до 20 аудиофайлов (.mp3, .wav, .ogg, .flac, .m4a, .aac)</p>
         }
 
-        <!-- Progress bar -->
+        
         @if (_isProcessing)
         {
             <div class="progress-container fade-in">
@@ -105,16 +105,16 @@
             </div>
         }
 
-        <!-- File name -->
+        
         @if (_selectedFileName != null)
         {
             <div class="file-info neon-card fade-in">
-                <span class="file-icon">🎵</span>
+                <span class="file-icon"></span>
                 <span class="file-name">@_selectedFileName</span>
             </div>
         }
 
-        <!-- Waveform -->
+        
         @if (_waveformData != null && _waveformData.Length > 0)
         {
             <div class="waveform-container neon-card fade-in">
@@ -125,7 +125,7 @@
             </div>
         }
 
-        <!-- Spectrogram -->
+        
         @if (_spectrogramData != null && _spectrogramData.Magnitudes.Count > 0)
         {
             <div class="spectrogram-container neon-card fade-in">
@@ -154,7 +154,7 @@
             </div>
         }
 
-        <!-- Single result -->
+        
         @if (!string.IsNullOrEmpty(_resultText) && _batchResult == null)
         {
             <div class="result-section fade-in">
@@ -213,7 +213,7 @@
             </div>
         }
 
-        <!-- Batch results -->
+        
         @if (_batchResult != null)
         {
             <div class="batch-results fade-in">
@@ -276,7 +276,7 @@
             </div>
         }
 
-        <!-- Error -->
+        
         @if (!string.IsNullOrEmpty(_errorText))
         {
             <div class="error-message neon-card fade-in">
@@ -320,21 +320,15 @@
         try
         {
             byte[] data = await ReadFileAsync(file);
-
-            // Step 1: Waveform
             SetProgress(20, "Построение формы волны...");
             _waveformData = await AudioService.GetWaveformDataAsync(data, _selectedFileName);
             StateHasChanged();
             if (_waveformData?.Length > 0)
                 await JSRuntime.InvokeVoidAsync("drawWaveform", _waveformCanvas, System.Text.Json.JsonSerializer.Serialize(_waveformData));
-
-            // Step 2: Analysis
             SetProgress(50, "Анализ аудио...");
             var (text, result) = await AudioService.AnalyzeAudioAsync(data, _selectedFileName);
             _resultText = text;
             _analysisResult = result;
-
-            // Step 3: Spectrogram
             if (result?.SpectrogramData != null && result.SpectrogramData.Magnitudes.Count > 0)
             {
                 SetProgress(85, "Построение спектрограммы...");

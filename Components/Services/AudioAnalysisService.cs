@@ -134,11 +134,6 @@ public class AudioAnalysisService : IAudioAnalysisService
             return ($"Ошибка при обработке архива: {ex.Message}", null);
         }
     }
-
-    /// <summary>
-    /// Получает реальную форму волны из Python-бэкенда.
-    /// Fallback на простой парсинг байт если бэкенд недоступен.
-    /// </summary>
     public async Task<float[]> GetWaveformDataAsync(byte[] audio_data, string file_name)
     {
         try
@@ -167,8 +162,6 @@ public class AudioAnalysisService : IAudioAnalysisService
         {
             _logger.LogWarning(ex, "Waveform endpoint failed, using fallback");
         }
-
-        // Fallback: грубый парсинг байт (не идеально, но хоть что-то)
         return GenerateFallbackWaveform(audio_data);
     }
 
@@ -176,8 +169,6 @@ public class AudioAnalysisService : IAudioAnalysisService
     {
         int target = 400;
         if (audio_data.Length == 0) return Array.Empty<float>();
-
-        // Пропускаем возможный заголовок (первые 44 байта WAV / 128 байт MP3 ID3)
         int offset = Math.Min(128, audio_data.Length / 10);
         int usable = audio_data.Length - offset;
         if (usable <= 0) return Array.Empty<float>();

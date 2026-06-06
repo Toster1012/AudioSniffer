@@ -40,7 +40,6 @@ public class RequestHistoryService : IRequestHistoryService
             var dailyCounts = _history
                 .GroupBy(r =>
                 {
-                    // Используем timestamp из AudioFileId если возможно
                     return DateTime.UtcNow.ToString("yyyy-MM-dd");
                 })
                 .Select(g => new DailyCount

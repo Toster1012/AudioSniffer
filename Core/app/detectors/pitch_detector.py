@@ -13,7 +13,9 @@ class PitchDetector:
 
     def analyze(self, audio_path: str) -> DetectionResult:
         y, sr = AudioProcessor.load_audio(audio_path)
-        pitches, magnitudes = librosa.piptrack(y=y, sr=sr, fmin=60, fmax=500, n_fft=self.frame_length, hop_length=self.hop_length)
+        f0 = librosa.yin(y, fmin=60, fmax=500, sr=sr, hop_length=self.hop_length)
+        pitches = f0.reshape(1,-1)
+        magnitudes = np.ones_like(pitches)
         pitch_values = []
         pitch_times = []
         for t in range(pitches.shape[1]):

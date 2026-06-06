@@ -34,10 +34,10 @@ UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 DETECTOR_WEIGHTS = {
-    "silence": 0.15,
-    "pitch":   0.20,
-    "splice":  0.20,
-    "ai":      0.45,
+    "silence": 0.10,
+    "pitch":   0.25,
+    "splice":  0.25,
+    "ai":      0.40,
 }
 
 SUPPORTED_AUDIO = {'.wav', '.mp3', '.ogg', '.flac', '.m4a', '.aac'}

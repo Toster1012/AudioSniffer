@@ -60,7 +60,6 @@ class AudioProcessor:
                 y, sr = librosa.load(file_path, sr=None, mono=True)
                 return y, sr
             except Exception:
-                # Fallback: resample to 22050
                 y, sr = librosa.load(file_path, sr=22050, mono=True)
                 return y, sr
 
@@ -122,8 +121,6 @@ class AudioProcessor:
         """
         try:
             y, sr = AudioProcessor.load_audio(file_path)
-
-            # Mel-spectrogram
             hop_length = 512
             n_fft = 2048
             mel_spec = librosa.feature.melspectrogram(
@@ -131,28 +128,18 @@ class AudioProcessor:
                 hop_length=hop_length, fmax=sr // 2
             )
             mel_db = librosa.power_to_db(mel_spec, ref=np.max)
-
-            # Downsample frames if too many
             n_frames = mel_db.shape[1]
             if n_frames > max_frames:
                 indices = np.linspace(0, n_frames - 1, max_frames, dtype=int)
                 mel_db = mel_db[:, indices]
                 n_frames = max_frames
-
-            # Frequency bins (mel scale centres)
             mel_freqs = librosa.mel_frequencies(n_mels=n_mels, fmax=sr // 2)
-
-            # Time axis
             total_duration = librosa.get_duration(y=y, sr=sr)
             times = np.linspace(0, total_duration, n_frames).tolist()
-
-            # Normalize to 0-1 range for frontend rendering
             min_db = float(mel_db.min())
             max_db = float(mel_db.max())
             db_range = max_db - min_db if max_db != min_db else 1.0
             norm_db = ((mel_db - min_db) / db_range).tolist()
-
-            # Detect suspicious regions: frames with sudden spectral jumps
             spectral_flux = np.sqrt(np.sum(np.diff(mel_spec, axis=1) ** 2, axis=0))
             if spectral_flux.max() > 0:
                 spectral_flux /= spectral_flux.max()
@@ -191,7 +178,6 @@ class AudioProcessor:
         """Извлекает правильную форму волны из аудиофайла"""
         try:
             y, sr = AudioProcessor.load_audio(file_path)
-            # Downsample for visualization
             target = n_samples
             if len(y) > target:
                 chunk = len(y) // target
@@ -200,15 +186,11 @@ class AudioProcessor:
                     start = i * chunk
                     end = min(start + chunk, len(y))
                     chunk_data = y[start:end]
-                    # RMS per chunk
                     rms = float(np.sqrt(np.mean(chunk_data ** 2)))
-                    # Keep sign from mean
                     sign = 1.0 if np.mean(chunk_data) >= 0 else -1.0
                     waveform.append(rms * sign)
             else:
                 waveform = y.tolist()
-
-            # Normalize
             max_val = max(abs(v) for v in waveform) if waveform else 1.0
             if max_val > 0:
                 waveform = [v / max_val for v in waveform]

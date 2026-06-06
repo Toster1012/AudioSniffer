@@ -13,6 +13,16 @@ class AIDetector:
             duration = librosa.get_duration(y=y, sr=sr)
             hop_length = 1024
             scores = {}
+
+            contrast = librosa.feature.spectral_contrast(y=y, sr=sr)
+            contrast_var = float(np.mean(np.std(contrast, axis=1)))
+            bandwidth = librosa.feature.spectral_bandwidth(y=y, sr=sr)[0]
+            bandwidth_cv = float(np.std(bandwidth)/(np.mean(bandwidth)+1e-8))
+            try:
+                tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+            except Exception:
+                tempo = 0
+            
             markers = []
 
             mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20, hop_length=hop_length)
