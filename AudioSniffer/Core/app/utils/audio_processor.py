@@ -4,8 +4,9 @@ import subprocess
 import shutil
 import tempfile
 import os
+import numpy as np
 from pathlib import Path
-from app.models import AudioMetadata
+from app.models import AudioMetadata, SpectrogramData
 
 
 FFMPEG_WINDOWS_PATHS = [
@@ -38,18 +39,15 @@ class AudioProcessor:
         path = Path(file_path)
 
         if not path.exists():
-            print(f"Validation failed: File not found - {file_path}")
             return False, "Файл не найден"
 
         if path.suffix.lower() not in AudioProcessor.SUPPORTED_FORMATS:
-            print(f"Validation failed: Unsupported format - {path.suffix}")
             return False, f"Неподдерживаемый формат. Разрешены: {', '.join(sorted(AudioProcessor.SUPPORTED_FORMATS))}"
 
         file_size_mb = path.stat().st_size / (1024 * 1024)
         if file_size_mb > AudioProcessor.MAX_FILE_SIZE_MB:
             return False, f"Файл слишком большой ({file_size_mb:.1f} MB). Максимум {AudioProcessor.MAX_FILE_SIZE_MB} MB"
 
-        print(f"Validation passed for file: {file_path}")
         return True, "OK"
 
     @staticmethod
@@ -58,13 +56,17 @@ class AudioProcessor:
         fmt = path.suffix.lower()
 
         if fmt not in FORMATS_NEEDING_CONVERSION:
-            y, sr = librosa.load(file_path, sr=None, mono=True)
-            return y, sr
+            try:
+                y, sr = librosa.load(file_path, sr=None, mono=True)
+                return y, sr
+            except Exception:
+                # Fallback: resample to 22050
+                y, sr = librosa.load(file_path, sr=22050, mono=True)
+                return y, sr
 
         ffmpeg_path = find_ffmpeg()
 
         if ffmpeg_path is None:
-            print(f"ffmpeg not found, trying librosa direct load for {fmt}")
             try:
                 y, sr = librosa.load(file_path, sr=None, mono=True)
                 return y, sr
@@ -74,7 +76,6 @@ class AudioProcessor:
                     f"Установите ffmpeg: https://ffmpeg.org/download.html"
                 ) from e
 
-        print(f"Using ffmpeg at: {ffmpeg_path}")
         wav_tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
         wav_tmp.close()
 
@@ -85,8 +86,6 @@ class AudioProcessor:
                 timeout=60
             )
             if result.returncode != 0:
-                stderr = result.stderr.decode(errors='replace')
-                print(f"ffmpeg stderr: {stderr}")
                 raise RuntimeError(f"ffmpeg не смог сконвертировать {fmt} в WAV")
 
             y, sr = librosa.load(wav_tmp.name, sr=None, mono=True)
@@ -114,6 +113,110 @@ class AudioProcessor:
             channels=int(channels),
             format=fmt
         )
+
+    @staticmethod
+    def extract_spectrogram(file_path: str, n_mels: int = 64, max_frames: int = 200) -> SpectrogramData:
+        """
+        Извлекает mel-спектрограмму и помечает подозрительные регионы
+        (резкие скачки спектральной плотности)
+        """
+        try:
+            y, sr = AudioProcessor.load_audio(file_path)
+
+            # Mel-spectrogram
+            hop_length = 512
+            n_fft = 2048
+            mel_spec = librosa.feature.melspectrogram(
+                y=y, sr=sr, n_mels=n_mels, n_fft=n_fft,
+                hop_length=hop_length, fmax=sr // 2
+            )
+            mel_db = librosa.power_to_db(mel_spec, ref=np.max)
+
+            # Downsample frames if too many
+            n_frames = mel_db.shape[1]
+            if n_frames > max_frames:
+                indices = np.linspace(0, n_frames - 1, max_frames, dtype=int)
+                mel_db = mel_db[:, indices]
+                n_frames = max_frames
+
+            # Frequency bins (mel scale centres)
+            mel_freqs = librosa.mel_frequencies(n_mels=n_mels, fmax=sr // 2)
+
+            # Time axis
+            total_duration = librosa.get_duration(y=y, sr=sr)
+            times = np.linspace(0, total_duration, n_frames).tolist()
+
+            # Normalize to 0-1 range for frontend rendering
+            min_db = float(mel_db.min())
+            max_db = float(mel_db.max())
+            db_range = max_db - min_db if max_db != min_db else 1.0
+            norm_db = ((mel_db - min_db) / db_range).tolist()
+
+            # Detect suspicious regions: frames with sudden spectral jumps
+            spectral_flux = np.sqrt(np.sum(np.diff(mel_spec, axis=1) ** 2, axis=0))
+            if spectral_flux.max() > 0:
+                spectral_flux /= spectral_flux.max()
+
+            suspicious_regions = []
+            threshold = 0.75
+            in_region = False
+            region_start = 0
+
+            flux_times = np.linspace(0, total_duration, len(spectral_flux))
+            for i, (t, flux) in enumerate(zip(flux_times, spectral_flux)):
+                if flux > threshold and not in_region:
+                    in_region = True
+                    region_start = float(t)
+                elif flux <= threshold and in_region:
+                    in_region = False
+                    suspicious_regions.append({
+                        "start": region_start,
+                        "end": float(t),
+                        "intensity": float(np.mean(spectral_flux[max(0, i-5):i+1]))
+                    })
+
+            return SpectrogramData(
+                frequencies=[round(float(f), 2) for f in mel_freqs],
+                times=times,
+                magnitudes=norm_db,
+                suspicious_regions=suspicious_regions
+            )
+
+        except Exception as e:
+            print(f"Spectrogram extraction failed: {e}")
+            return SpectrogramData()
+
+    @staticmethod
+    def extract_waveform(file_path: str, n_samples: int = 400) -> list:
+        """Извлекает правильную форму волны из аудиофайла"""
+        try:
+            y, sr = AudioProcessor.load_audio(file_path)
+            # Downsample for visualization
+            target = n_samples
+            if len(y) > target:
+                chunk = len(y) // target
+                waveform = []
+                for i in range(target):
+                    start = i * chunk
+                    end = min(start + chunk, len(y))
+                    chunk_data = y[start:end]
+                    # RMS per chunk
+                    rms = float(np.sqrt(np.mean(chunk_data ** 2)))
+                    # Keep sign from mean
+                    sign = 1.0 if np.mean(chunk_data) >= 0 else -1.0
+                    waveform.append(rms * sign)
+            else:
+                waveform = y.tolist()
+
+            # Normalize
+            max_val = max(abs(v) for v in waveform) if waveform else 1.0
+            if max_val > 0:
+                waveform = [v / max_val for v in waveform]
+
+            return waveform
+        except Exception as e:
+            print(f"Waveform extraction failed: {e}")
+            return []
 
     @staticmethod
     def convert_to_wav(input_path: str, output_path: str) -> bool:

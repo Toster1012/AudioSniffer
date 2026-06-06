@@ -1,4 +1,4 @@
-﻿using AudioSniffer.Models;
+using AudioSniffer.Models;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -20,6 +20,12 @@ public class AudioAnalysisService : IAudioAnalysisService
         { ".m4a",  "audio/mp4"  }
     };
 
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        NumberHandling = JsonNumberHandling.AllowReadingFromString
+    };
+
     public AudioAnalysisService(ILogger<AudioAnalysisService> logger, IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
@@ -30,205 +36,187 @@ public class AudioAnalysisService : IAudioAnalysisService
 
     public async Task<(string ResultText, AnalysisResult? Result)> AnalyzeAudioAsync(byte[] audio_data, string file_name)
     {
-        int max_retry_attempts = 3;
-        int retry_delay_milliseconds = 2000;
+        int max_retries = 3;
+        int retry_delay = 2000;
 
-        try
+        for (int attempt = 1; attempt <= max_retries; attempt++)
         {
-            for (int current_attempt = 1; current_attempt <= max_retry_attempts; current_attempt++)
+            try
             {
-                try
+                string extension = Path.GetExtension(file_name)?.ToLowerInvariant() ?? string.Empty;
+                string content_type = AudioContentTypes.TryGetValue(extension, out string? mapped_type)
+                    ? mapped_type
+                    : "audio/mpeg";
+
+                using MultipartFormDataContent request_content = new();
+                ByteArrayContent file_content = new(audio_data);
+                file_content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(content_type);
+                request_content.Add(file_content, "file", file_name);
+
+                HttpResponseMessage response = await _httpClient.PostAsync("/analyze", request_content);
+
+                if (!response.IsSuccessStatusCode)
                 {
-                    string extension = Path.GetExtension(file_name)?.ToLowerInvariant() ?? string.Empty;
-                    string content_type = AudioContentTypes.TryGetValue(extension, out string? mapped_type)
-                        ? mapped_type
-                        : "audio/mpeg";
-
-                    using MultipartFormDataContent request_content = new MultipartFormDataContent();
-                    ByteArrayContent file_content = new ByteArrayContent(audio_data);
-                    file_content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(content_type);
-                    request_content.Add(file_content, "file", file_name);
-
-                    HttpResponseMessage backend_response = await _httpClient.PostAsync("/analyze", request_content);
-
-                    if (!backend_response.IsSuccessStatusCode)
-                    {
-                        string error_content = await backend_response.Content.ReadAsStringAsync();
-                        _logger.LogError("Backend error {StatusCode}: {Error}", backend_response.StatusCode, error_content);
-                        return ($"Ошибка бэкенда: {error_content}", null);
-                    }
-
-                    string result_json = await backend_response.Content.ReadAsStringAsync();
-                    _logger.LogInformation("Backend response: {Response}", result_json);
-
-                    BackendAnalysisResponse? parsed_result = JsonSerializer.Deserialize<BackendAnalysisResponse>(result_json, new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true
-                    });
-
-                    if (parsed_result == null)
-                        return ("Ошибка анализа аудио", null);
-
-                    float overall_confidence = parsed_result.OverallConfidence;
-                    bool is_suspicious = parsed_result.IsSuspicious;
-
-                    _logger.LogInformation("Parsed values - Confidence: {Confidence}, IsSuspicious: {IsSuspicious}", overall_confidence, is_suspicious);
-
-                    var analysis_result = new AnalysisResult
-                    {
-                        AudioFileId = string.IsNullOrEmpty(parsed_result.AudioFileId) ? file_name : parsed_result.AudioFileId,
-                        OverallConfidence = overall_confidence,
-                        IsNeuralNetwork = is_suspicious,
-                        Detections = parsed_result.Detections.Select(d => new DetectionResult
-                        {
-                            Type = d.Type,
-                            Title = d.Title,
-                            Confidence = d.Confidence,
-                            Description = d.Description
-                        }).ToList(),
-                        Metadata = new AudioMetadata
-                        {
-                            DurationSeconds = parsed_result.Metadata.DurationSeconds,
-                            SampleRate = parsed_result.Metadata.SampleRate,
-                            Channels = parsed_result.Metadata.Channels,
-                            Format = parsed_result.Metadata.Format
-                        }
-                    };
-
-                    string result_text;
-                    if (is_suspicious)
-                    {
-                        if (overall_confidence >= 0.9f)
-                            result_text = $"Аудио сгенерировано нейросетью, с вероятностью: {overall_confidence:P0}";
-                        else if (overall_confidence >= 0.7f)
-                            result_text = $"Аудио вероятно сгенерировано нейросетью, с шансом: {overall_confidence:P0}";
-                        else
-                            result_text = $"Аудио возможно сгенерировано нейросетью, с шансом: {overall_confidence:P0}";
-                    }
-                    else
-                    {
-                        result_text = $"Аудио врядли сгенерировано нейросетью, вероятность генерации: {overall_confidence:P0}";
-                    }
-
-                    return (result_text, analysis_result);
+                    string error = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("Backend error {Status}: {Error}", response.StatusCode, error);
+                    return ($"Ошибка бэкенда ({(int)response.StatusCode}): {error}", null);
                 }
-                catch (HttpRequestException http_exception) when (current_attempt < max_retry_attempts)
-                {
-                    _logger.LogWarning(http_exception, "Connection attempt {Attempt}/{MaxRetries} failed, retrying...", current_attempt, max_retry_attempts);
-                    await Task.Delay(retry_delay_milliseconds);
-                }
+
+                string json = await response.Content.ReadAsStringAsync();
+                _logger.LogDebug("Backend response: {Response}", json[..Math.Min(json.Length, 500)]);
+
+                AnalysisResult? result = JsonSerializer.Deserialize<AnalysisResult>(json, JsonOptions);
+
+                if (result == null)
+                    return ("Ошибка парсинга ответа от анализатора", null);
+
+                string result_text = BuildResultText(result.OverallConfidence, result.IsAiGenerated);
+                return (result_text, result);
             }
-        }
-        catch (HttpRequestException http_request_exception)
-        {
-            _logger.LogError(http_request_exception, "HTTP error while analyzing audio after {MaxRetries} attempts: {FileName}", max_retry_attempts, file_name);
-            return ("Не удалось подключиться к серверу анализа. Проверьте, что бэкенд запущен на localhost:5000", null);
-        }
-        catch (Exception processing_exception)
-        {
-            _logger.LogError(processing_exception, "Error analyzing audio file: {FileName}", file_name);
-            return ("Ошибка при обработке аудио", null);
+            catch (HttpRequestException ex) when (attempt < max_retries)
+            {
+                _logger.LogWarning(ex, "Attempt {Attempt}/{Max} failed, retrying...", attempt, max_retries);
+                await Task.Delay(retry_delay);
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError(ex, "All {Max} attempts failed for {File}", max_retries, file_name);
+                return ("Не удалось подключиться к серверу анализа. Проверьте, что бэкенд запущен на localhost:5000", null);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error analyzing {File}", file_name);
+                return ($"Ошибка при обработке аудио: {ex.Message}", null);
+            }
         }
 
         return ("Не удалось подключиться к серверу анализа. Проверьте, что бэкенд запущен на localhost:5000", null);
     }
 
-    public async Task<float[]> GetWaveformDataAsync(byte[] audio_data)
+    public async Task<(string ResultText, BatchAnalysisResult? Result)> AnalyzeZipAsync(byte[] zip_data, string file_name)
     {
         try
         {
-            await Task.Delay(100);
+            using MultipartFormDataContent request_content = new();
+            ByteArrayContent file_content = new(zip_data);
+            file_content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/zip");
+            request_content.Add(file_content, "file", file_name);
 
-            List<float> audio_samples = new List<float>();
-            int target_sample_count = 200;
-            int step_size = Math.Max(1, audio_data.Length / target_sample_count);
+            HttpResponseMessage response = await _httpClient.PostAsync("/analyze/batch", request_content);
 
-            for (int byte_index = 0; byte_index < audio_data.Length; byte_index += step_size)
+            if (!response.IsSuccessStatusCode)
             {
-                if (audio_samples.Count >= target_sample_count)
-                    break;
-
-                float sample_sum = 0;
-                int sample_count = 0;
-
-                for (int offset = byte_index; offset < Math.Min(byte_index + step_size, audio_data.Length); offset++)
-                {
-                    float normalized_value = (audio_data[offset] - 128) / 128f;
-                    sample_sum += Math.Abs(normalized_value);
-                    sample_count++;
-                }
-
-                float average_amplitude = sample_count > 0 ? sample_sum / sample_count : 0;
-                audio_samples.Add(average_amplitude * (byte_index % 2 == 0 ? 1f : -1f));
+                string error = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Batch backend error {Status}: {Error}", response.StatusCode, error);
+                return ($"Ошибка бэкенда: {error}", null);
             }
 
-            if (audio_samples.Count > 0)
-            {
-                float max_sample_value = audio_samples.Max(sample => Math.Abs(sample));
+            string json = await response.Content.ReadAsStringAsync();
+            BatchAnalysisResult? result = JsonSerializer.Deserialize<BatchAnalysisResult>(json, JsonOptions);
 
-                if (max_sample_value > 0)
-                {
-                    for (int sample_index = 0; sample_index < audio_samples.Count; sample_index++)
-                    {
-                        audio_samples[sample_index] /= max_sample_value;
-                    }
-                }
-            }
+            if (result == null)
+                return ("Ошибка парсинга ответа", null);
 
-            return audio_samples.ToArray();
+            int ai_count = result.Results.Count(r => r.IsAiGenerated);
+            string summary = $"Проанализировано {result.AnalyzedFiles} из {result.TotalFiles} файлов. " +
+                             $"ИИ-генерация обнаружена в {ai_count} файлах.";
+
+            return (summary, result);
         }
-        catch (Exception waveform_exception)
+        catch (HttpRequestException ex)
         {
-            _logger.LogError(waveform_exception, "Error extracting waveform data");
-            throw;
+            _logger.LogError(ex, "HTTP error in batch analysis");
+            return ("Не удалось подключиться к серверу анализа. Проверьте, что бэкенд запущен на localhost:5000", null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in batch analysis");
+            return ($"Ошибка при обработке архива: {ex.Message}", null);
         }
     }
 
-    private class BackendAnalysisResponse
+    /// <summary>
+    /// Получает реальную форму волны из Python-бэкенда.
+    /// Fallback на простой парсинг байт если бэкенд недоступен.
+    /// </summary>
+    public async Task<float[]> GetWaveformDataAsync(byte[] audio_data, string file_name)
     {
-        [JsonPropertyName("audio_file_id")]
-        public string AudioFileId { get; set; } = string.Empty;
+        try
+        {
+            string extension = Path.GetExtension(file_name)?.ToLowerInvariant() ?? string.Empty;
+            string content_type = AudioContentTypes.TryGetValue(extension, out string? mapped_type)
+                ? mapped_type : "audio/mpeg";
 
-        [JsonPropertyName("overall_confidence")]
-        public float OverallConfidence { get; set; }
+            using MultipartFormDataContent request_content = new();
+            ByteArrayContent file_content = new(audio_data);
+            file_content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(content_type);
+            request_content.Add(file_content, "file", file_name);
 
-        [JsonPropertyName("is_suspicious")]
-        public bool IsSuspicious { get; set; }
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            HttpResponseMessage response = await _httpClient.PostAsync("/waveform", request_content, cts.Token);
 
-        [JsonPropertyName("detections")]
-        public List<BackendDetection> Detections { get; set; } = new();
+            if (response.IsSuccessStatusCode)
+            {
+                string json = await response.Content.ReadAsStringAsync(cts.Token);
+                float[]? samples = JsonSerializer.Deserialize<float[]>(json, JsonOptions);
+                if (samples != null && samples.Length > 0)
+                    return samples;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Waveform endpoint failed, using fallback");
+        }
 
-        [JsonPropertyName("metadata")]
-        public BackendMetadata Metadata { get; set; } = new();
+        // Fallback: грубый парсинг байт (не идеально, но хоть что-то)
+        return GenerateFallbackWaveform(audio_data);
     }
 
-    private class BackendDetection
+    private static float[] GenerateFallbackWaveform(byte[] audio_data)
     {
-        [JsonPropertyName("type")]
-        public string Type { get; set; } = string.Empty;
+        int target = 400;
+        if (audio_data.Length == 0) return Array.Empty<float>();
 
-        [JsonPropertyName("title")]
-        public string Title { get; set; } = string.Empty;
+        // Пропускаем возможный заголовок (первые 44 байта WAV / 128 байт MP3 ID3)
+        int offset = Math.Min(128, audio_data.Length / 10);
+        int usable = audio_data.Length - offset;
+        if (usable <= 0) return Array.Empty<float>();
 
-        [JsonPropertyName("confidence")]
-        public float Confidence { get; set; }
+        int step = Math.Max(1, usable / target);
+        List<float> result = new();
+        Random rng = new(42); // фиксированный seed для воспроизводимости
 
-        [JsonPropertyName("description")]
-        public string Description { get; set; } = string.Empty;
+        for (int i = offset; i < audio_data.Length && result.Count < target; i += step)
+        {
+            float v = (audio_data[i] - 128) / 128f;
+            result.Add(v);
+        }
+
+        float max = result.Max(v => Math.Abs(v));
+        if (max > 0)
+            for (int i = 0; i < result.Count; i++)
+                result[i] /= max;
+
+        return result.ToArray();
     }
 
-    private class BackendMetadata
+    private static string BuildResultText(float confidence, bool is_ai)
     {
-        [JsonPropertyName("duration_seconds")]
-        public float DurationSeconds { get; set; }
-
-        [JsonPropertyName("sample_rate")]
-        public int SampleRate { get; set; }
-
-        [JsonPropertyName("channels")]
-        public int Channels { get; set; }
-
-        [JsonPropertyName("format")]
-        public string Format { get; set; } = string.Empty;
+        if (is_ai)
+        {
+            if (confidence >= 0.85f)
+                return $"🔴 Аудио сгенерировано нейросетью с высокой вероятностью: {confidence:P0}";
+            else if (confidence >= 0.60f)
+                return $"🟠 Аудио вероятно сгенерировано нейросетью: {confidence:P0}";
+            else
+                return $"🟡 Аудио возможно сгенерировано нейросетью: {confidence:P0}";
+        }
+        else
+        {
+            if (confidence <= 0.15f)
+                return $"🟢 Аудио похоже на живую запись. Вероятность ИИ: {confidence:P0}";
+            else
+                return $"🟢 Аудио врядли сгенерировано нейросетью. Вероятность ИИ: {confidence:P0}";
+        }
     }
 }

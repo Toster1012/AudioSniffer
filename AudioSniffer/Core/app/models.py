@@ -7,6 +7,7 @@ class DetectorType(str, Enum):
     SILENCE = "silence"
     PITCH = "pitch"
     SPLICE = "splice"
+    AI = "ai"
 
 
 class TimeMarker(BaseModel):
@@ -25,6 +26,13 @@ class DetectionResult(BaseModel):
     additional_data: Dict[str, Any] = Field(default_factory=dict)
 
 
+class SpectrogramData(BaseModel):
+    frequencies: List[float] = Field(default_factory=list)
+    times: List[float] = Field(default_factory=list)
+    magnitudes: List[List[float]] = Field(default_factory=list)
+    suspicious_regions: List[Dict[str, Any]] = Field(default_factory=list)
+
+
 class AudioMetadata(BaseModel):
     duration_seconds: float
     sample_rate: int
@@ -34,14 +42,24 @@ class AudioMetadata(BaseModel):
 
 class AnalysisResult(BaseModel):
     audio_file_id: str
+    file_name: str = ""
     overall_confidence: float = Field(..., ge=0.0, le=1.0)
     is_suspicious: bool
     detections: List[DetectionResult]
     metadata: AudioMetadata
+    spectrogram_data: Optional[SpectrogramData] = None
+
+
+class BatchAnalysisResult(BaseModel):
+    total_files: int
+    analyzed_files: int
+    failed_files: int
+    results: List[AnalysisResult]
+    errors: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class HealthResponse(BaseModel):
     status: str = "healthy"
-    version: str = "1.0.0"
-    detectors: List[str] = ["silence", "pitch", "splice"]
+    version: str = "3.0.0"
+    detectors: List[str] = ["silence", "pitch", "splice", "ai"]
     error: Optional[str] = None
