@@ -15,7 +15,7 @@
 
 <div class="admin-container">
     <div class="admin-header">
-        <h1>🛡️ Панель администратора</h1>
+        <h1>Панель администратора</h1>
         <p>Статистика анализов AudioSniffer</p>
         <a href="/" class="neon-button" style="display:inline-flex;margin-top:16px;text-decoration:none;">← Вернуться к анализу</a>
     </div>
@@ -53,7 +53,7 @@
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
             <h2>История анализов</h2>
             <button class="neon-button" style="font-size:14px;padding:8px 18px;" @onclick="ClearHistoryAsync">
-                🗑 Очистить историю
+                Очистить историю
             </button>
         </div>
 
@@ -81,7 +81,7 @@
                         <tr>
                             <td>@(string.IsNullOrEmpty(item.FileName) ? item.AudioFileId : item.FileName)</td>
                             <td class="@(item.IsAiGenerated ? "generated" : "real")">
-                                @(item.IsAiGenerated ? "🔴 ИИ-генерация" : "🟢 Живое аудио")
+                                @(item.IsAiGenerated ? "ИИ-генерация" : "Живое аудио")
                             </td>
                             <td>@((item.OverallConfidence * 100).ToString("0.0"))%</td>
                             <td>@item.Metadata.DurationSeconds.ToString("0.0")с</td>

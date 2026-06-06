@@ -226,7 +226,7 @@ window.drawSpectrogram = function(canvas, dataJson) {
     const data = JSON.parse(dataJson);
     if (!data || !data.magnitudes || data.magnitudes.length === 0) return;
 
-    const magnitudes = data.magnitudes;   // [n_mels][n_frames]
+    const magnitudes = data.magnitudes;   
     const suspiciousRegions = data.suspicious_regions || [];
     const times = data.times || [];
     const n_mels = magnitudes.length;
@@ -253,11 +253,11 @@ window.drawSpectrogram = function(canvas, dataJson) {
     const cellH = H / n_mels;
 
     for (let mel = 0; mel < n_mels; mel++) {
-        const y0 = Math.floor((n_mels - 1 - mel) * cellH); // flip: low freq at bottom
+        const y0 = Math.floor((n_mels - 1 - mel) * cellH); 
         const y1 = Math.floor((n_mels - mel) * cellH);
 
         for (let frame = 0; frame < n_frames; frame++) {
-            const val = magnitudes[mel][frame]; // 0..1
+            const val = magnitudes[mel][frame]; 
             const x0 = Math.floor(frame * cellW);
             const x1 = Math.floor((frame + 1) * cellW);
             const [r, g, b] = plasmaColor(val);
@@ -289,7 +289,7 @@ window.drawSpectrogram = function(canvas, dataJson) {
             ctx.strokeRect(xStart, 0, regionW, H);
             ctx.fillStyle = 'rgba(255,255,255,0.95)';
             ctx.font = 'bold 10px monospace';
-            const label = `⚠ ${region.start.toFixed(1)}s`;
+            const label = ` ${region.start.toFixed(1)}s`;
             ctx.fillText(label, xStart + 3, 14);
         });
     }

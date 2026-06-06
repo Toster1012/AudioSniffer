@@ -1,73 +1,24 @@
 @echo off
 title AudioSniffer System Launcher
 
-echo Starting AudioSniffer System...
+echo Starting AudioSniffer System (HTTPS)...
 echo ==================================
 
-REM Check if we're running from the correct directory
 if not exist "AudioSniffer.sln" (
     echo Error: Please run this script from the AudioSniffer project root directory
     pause
     exit /b 1
 )
 
-REM Start Python backend in a separate window
 start "AudioSniffer Backend" /MIN cmd /c start_backend.bat
 
-echo Waiting for backend to start...
+echo Waiting for backend...
 timeout /t 15 /nobreak >nul
 
-REM Check if backend is running with multiple retries
-set retry_count=0
-set max_retries=10
-set backend_ready=0
-
-:check_backend
-curl -s http://localhost:5000/health >nul 2>&1
-if %errorlevel% equ 0 (
-    set backend_ready=1
-    echo Backend is ready and responding!
-    goto start_frontend
-) else (
-    set /a retry_count+=1
-    if %retry_count% lss %max_retries% (
-        echo Waiting for backend to initialize... (attempt %retry_count%/%max_retries%)
-        timeout /t 5 /nobreak >nul
-        goto check_backend
-    )
-    echo Warning: Backend not responding after multiple attempts, starting frontend anyway...
-)
-
-:start_frontend
-echo Starting C# frontend on http://localhost:8000...
-echo =============================================
-
-REM Kill any existing processes that might block the port
-taskkill /f /im AudioSniffer.exe >nul 2>&1
-taskkill /f /im dotnet.exe >nul 2>&1
-
-REM The C# project lives in AudioSniffer\AudioSniffer\
 cd /d "%~dp0AudioSniffer"
-
-if not exist "AudioSniffer.csproj" (
-    echo ERROR: AudioSniffer.csproj not found in %cd%
-    echo Make sure the project structure is correct.
-    pause
-    exit /b 1
-)
-
-echo Starting frontend (this window will stay open while the application is running)...
-echo.
-echo If you want to stop the application, press Ctrl+C in this window.
-echo.
-echo Open browser at: http://localhost:8000
-echo Admin panel at:  http://localhost:8000/admin
-echo.
-
-dotnet run
+echo Starting frontend on HTTPS...
+dotnet run --urls "https://localhost:8000;http://localhost:8000"
 
 echo.
-echo Frontend has stopped.
-echo.
-echo Press any key to exit...
-pause >nul
+echo If you want to stop - press Ctrl+C
+pause

@@ -46,12 +46,12 @@ html, body {
 
 html {
     overflow-y: auto;
-     /* Firefox */
-    -ms-overflow-style: none; /* IE and Edge */
+     
+    -ms-overflow-style: none; 
 }
 
 html::-webkit-scrollbar {
-    display: none; /* Chrome, Safari, Opera */
+     
 }
 
 body {
@@ -243,7 +243,7 @@ body {
 }
 
 .file-input {
-    display: none;
+    
 }
 
 .neon-button {
@@ -282,7 +282,7 @@ body {
     }
 
 .button-glow {
-    display: none;
+    
 }
 
 .button-text {
@@ -793,9 +793,7 @@ div[aria-live="assertive"] {
     }
 }
 
-/* ============================================================
-   NEW STYLES: Mode selector, progress, spectrogram, batch results
-   ============================================================ */
+
 
 .mode-selector {
     display: flex;
@@ -835,7 +833,7 @@ div[aria-live="assertive"] {
     margin-bottom: 16px;
 }
 
-/* Progress */
+
 .progress-container {
     margin: 16px auto;
     max-width: 500px;
@@ -864,7 +862,7 @@ div[aria-live="assertive"] {
     display: block;
 }
 
-/* Section label */
+
 .section-label {
     font-size: 0.8rem;
     font-weight: 600;
@@ -877,7 +875,7 @@ div[aria-live="assertive"] {
     gap: 10px;
 }
 
-/* Spectrogram */
+
 .spectrogram-container {
     margin-top: 20px;
 }
@@ -920,7 +918,7 @@ div[aria-live="assertive"] {
     font-family: monospace;
 }
 
-/* Confidence bar */
+
 .confidence-bar-wrapper {
     display: flex;
     align-items: center;
@@ -953,7 +951,7 @@ div[aria-live="assertive"] {
     text-align: right;
 }
 
-/* Metadata row */
+
 .metadata-row {
     display: flex;
     flex-wrap: wrap;
@@ -966,7 +964,7 @@ div[aria-live="assertive"] {
     border-bottom: 1px solid var(--border);
 }
 
-/* Detections grid */
+
 .detections-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -1042,12 +1040,12 @@ div[aria-live="assertive"] {
     color: var(--text-secondary);
 }
 
-/* Result card colors */
+
 .result-danger { border-left: 4px solid #ff3b3b !important; }
 .result-warning { border-left: 4px solid #ff8c00 !important; }
 .result-safe { border-left: 4px solid #00c851 !important; }
 
-/* Batch results */
+
 .batch-results { display: flex; flex-direction: column; gap: 16px; }
 
 .batch-summary {

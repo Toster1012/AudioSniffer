@@ -134,6 +134,7 @@ public class AudioAnalysisService : IAudioAnalysisService
             return ($"Ошибка при обработке архива: {ex.Message}", null);
         }
     }
+
     public async Task<float[]> GetWaveformDataAsync(byte[] audio_data, string file_name)
     {
         try
@@ -175,7 +176,7 @@ public class AudioAnalysisService : IAudioAnalysisService
 
         int step = Math.Max(1, usable / target);
         List<float> result = new();
-        Random rng = new(42); // фиксированный seed для воспроизводимости
+        Random rng = new(42);
 
         for (int i = offset; i < audio_data.Length && result.Count < target; i += step)
         {
@@ -196,18 +197,18 @@ public class AudioAnalysisService : IAudioAnalysisService
         if (is_ai)
         {
             if (confidence >= 0.85f)
-                return $"🔴 Аудио сгенерировано нейросетью с высокой вероятностью: {confidence:P0}";
+                return $"Аудио сгенерировано нейросетью с высокой вероятностью: {confidence:P0}";
             else if (confidence >= 0.60f)
-                return $"🟠 Аудио вероятно сгенерировано нейросетью: {confidence:P0}";
+                return $"Аудио вероятно сгенерировано нейросетью: {confidence:P0}";
             else
-                return $"🟡 Аудио возможно сгенерировано нейросетью: {confidence:P0}";
+                return $"Аудио возможно сгенерировано нейросетью: {confidence:P0}";
         }
         else
         {
             if (confidence <= 0.15f)
-                return $"🟢 Аудио похоже на живую запись. Вероятность ИИ: {confidence:P0}";
+                return $"Аудио похоже на живую запись. Вероятность ИИ: {confidence:P0}";
             else
-                return $"🟢 Аудио врядли сгенерировано нейросетью. Вероятность ИИ: {confidence:P0}";
+                return $"Аудио вряд ли сгенерировано нейросетью. Вероятность ИИ: {confidence:P0}";
         }
     }
 }

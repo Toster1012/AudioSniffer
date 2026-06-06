@@ -26,65 +26,91 @@
         <p class="subtitle">Определяет, создано ли аудио с помощью ИИ</p>
 
         <div class="mode-selector">
-            <button class="mode-btn @(_uploadMode == "single" ? "active" : "")"
-                    @onclick='() => _uploadMode = "single"'>
-                Один файл
-            </button>
-            <button class="mode-btn @(_uploadMode == "zip" ? "active" : "")"
-                    @onclick='() => _uploadMode = "zip"'>
-                ZIP-архив
-            </button>
+            <button class="mode-btn @(_uploadMode == "single" ? "active" : "")" @onclick='() => _uploadMode = "single"'>Один файл</button>
+            <button class="mode-btn @(_uploadMode == "zip" ? "active" : "")" @onclick='() => _uploadMode = "zip"'>ZIP-архив</button>
         </div>
-        
-        ```
 
----
-**Путь:** `Admin.razor` (в корне проекта)
+        @if (_uploadMode == "single")
+        {
+            <div class="upload-section">
+                <InputFile OnChange="HandleSingleFileAsync" class="file-input" id="fileInput" accept=".mp3,.wav,.ogg,.aac,.flac,.m4a" disabled="@_isProcessing" />
+                <label for="fileInput" class="neon-button @(_isProcessing ? "disabled" : "")">
+                    <span class="button-text">
+                        @if (_isProcessing) { <span class="spinner"></span> <text>Анализ...</text> } else { <text>Загрузить аудиофайл</text> }
+                    </span>
+                </label>
+            </div>
+        }
 
-```razor
-@page "/admin"
-@rendermode RenderMode.InteractiveServer
-@using AudioSniffer.Services
-@using AudioSniffer.Models
-@inject IRequestHistoryService HistoryService
-@inject IJSRuntime JSRuntime
+        @if (_uploadMode == "zip")
+        {
+            <div class="upload-section">
+                <InputFile OnChange="HandleZipFileAsync" class="file-input" id="zipInput" accept=".zip" disabled="@_isProcessing" />
+                <label for="zipInput" class="neon-button @(_isProcessing ? "disabled" : "")">
+                    <span class="button-text">
+                        @if (_isProcessing) { <span class="spinner"></span> <text>Обработка архива...</text> } else { <text>Загрузить ZIP-архив</text> }
+                    </span>
+                </label>
+            </div>
+            <p class="zip-hint">ZIP может содержать до 20 аудиофайлов</p>
+        }
 
-<PageTitle>AudioSniffer — Панель администратора</PageTitle>
+        @if (_isProcessing)
+        {
+            <div class="progress-container fade-in">
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: @(_progressPercent)%"></div>
+                </div>
+                <span class="progress-label">@_progressLabel</span>
+            </div>
+        }
 
-<div class="neon-background">
-    <div class="neon-grid"></div>
-    <div class="neon-orb neon-orb-1"></div>
-    <div class="neon-orb neon-orb-2"></div>
+        @if (_selectedFileName != null)
+        {
+            <div class="file-info neon-card fade-in">
+                <span class="file-name">@_selectedFileName</span>
+            </div>
+        }
+
+        @if (_waveformData != null && _waveformData.Length > 0)
+        {
+            <div class="waveform-container neon-card fade-in">
+                <div class="section-label">Форма волны</div>
+                <div class="canvas-container">
+                    <canvas @ref="_waveformCanvas" id="waveformCanvas"></canvas>
+                </div>
+            </div>
+        }
+
+        @if (_spectrogramData != null && _spectrogramData.Magnitudes.Count > 0)
+        {
+            <div class="spectrogram-container neon-card fade-in">
+                <div class="section-label">Спектрограмма</div>
+                <div class="canvas-container spectrogram-canvas-container">
+                    <canvas @ref="_spectrogramCanvas" id="spectrogramCanvas"></canvas>
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(_resultText) && _batchResult == null)
+        {
+            <div class="result-section fade-in">
+                <div class="result-content neon-card @GetResultClass()">
+                    <p class="result-text">@_resultText</p>
+                    <!-- остальной код результата без эмодзи -->
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(_errorText))
+        {
+            <div class="error-message neon-card fade-in">
+                <span>@_errorText</span>
+            </div>
+        }
+    </div>
 </div>
 
-<div class="admin-container">
-    <div class="admin-header">
-        <h1>Панель администратора</h1>
-        <p>Статистика анализов AudioSniffer</p>
-        <a href="/" class="neon-button" style="display:inline-flex;margin-top:16px;text-decoration:none;">Вернуться к анализу</a>
-    </div>
-
-    @if (_stats != null)
-    {
-        <div class="stats-overview">
-            <div class="stat-card">
-                <h3>Всего анализов</h3>
-                <div class="stat-value">@_stats.TotalAnalyses</div>
-            </div>
-            <div class="stat-card">
-                <h3>ИИ-генерация</h3>
-                <div class="stat-value generated">@_stats.AiGenerated</div>
-            </div>
-            <div class="stat-card">
-                <h3>Живые записи</h3>
-                <div class="stat-value real">@_stats.RealAudio</div>
-            </div>
-            ```
-
----
-**Путь:** `MainLayout.razor` (обычно находится в папке `Components/Layout/`)
-
-```razor
-@inherits LayoutComponentBase
-
-@Body
+@code {
+    
+}

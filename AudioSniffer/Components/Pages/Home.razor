@@ -133,7 +133,7 @@
                     Спектрограмма
                     @if (_spectrogramData.SuspiciousRegions.Count > 0)
                     {
-                        <span class="suspicious-badge">⚠️ @_spectrogramData.SuspiciousRegions.Count подозрительных зон</span>
+                        <span class="suspicious-badge"> @_spectrogramData.SuspiciousRegions.Count подозрительных зон</span>
                     }
                 </div>
                 <div class="canvas-container spectrogram-canvas-container">
@@ -172,10 +172,10 @@
                         </div>
 
                         <div class="metadata-row">
-                            <span>⏱ @_analysisResult.Metadata.DurationSeconds.ToString("0.0")с</span>
-                            <span>📡 @_analysisResult.Metadata.SampleRate Гц</span>
-                            <span>🔊 @_analysisResult.Metadata.Channels кан.</span>
-                            <span>📁 @_analysisResult.Metadata.Format.ToUpper()</span>
+                            <span>@_analysisResult.Metadata.DurationSeconds.ToString("0.0")с</span>
+                            <span>@_analysisResult.Metadata.SampleRate Гц</span>
+                            <span> @_analysisResult.Metadata.Channels кан.</span>
+                            <span> @_analysisResult.Metadata.Format.ToUpper()</span>
                         </div>
 
                         <div class="detections-grid">
@@ -244,7 +244,7 @@
                     {
                         <div class="batch-item neon-card @(item.IsAiGenerated ? "ai" : "real")">
                             <div class="batch-item-header">
-                                <span class="batch-item-icon">@(item.IsAiGenerated ? "🔴" : "🟢")</span>
+                                <span class="batch-item-icon">@(item.IsAiGenerated ? "" : "")</span>
                                 <span class="batch-item-name">@(string.IsNullOrEmpty(item.FileName) ? item.AudioFileId : item.FileName)</span>
                                 <span class="batch-item-conf">@((item.OverallConfidence * 100).ToString("0.0"))%</span>
                             </div>
@@ -255,7 +255,7 @@
                             <div class="batch-item-meta">
                                 <span>@item.Metadata.DurationSeconds.ToString("0.0")с</span>
                                 <span>@item.Metadata.Format.ToUpper()</span>
-                                <span>@(item.IsAiGenerated ? "⚠️ Синтетика" : "✅ Живое")</span>
+                                <span>@(item.IsAiGenerated ? " Синтетика" : "✅ Живое")</span>
                             </div>
                         </div>
                     }
@@ -280,7 +280,7 @@
         @if (!string.IsNullOrEmpty(_errorText))
         {
             <div class="error-message neon-card fade-in">
-                <span class="error-icon">⚠️</span>
+                <span class="error-icon"></span>
                 <span>@_errorText</span>
             </div>
         }

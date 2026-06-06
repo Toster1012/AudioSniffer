@@ -32,7 +32,7 @@ def find_ffmpeg() -> str | None:
 
 class AudioProcessor:
     SUPPORTED_FORMATS = {'.wav', '.mp3', '.ogg', '.flac', '.m4a', '.aac'}
-    MAX_FILE_SIZE_MB = 50
+    MAX_FILE_SIZE_MB = 25
 
     @staticmethod
     def validate_audio_file(file_path: str) -> tuple[bool, str]:
@@ -57,7 +57,7 @@ class AudioProcessor:
 
         if fmt not in FORMATS_NEEDING_CONVERSION:
             try:
-                y, sr = librosa.load(file_path, sr=None, mono=True)
+                y, sr = librosa.load(file_path, sr=22050, mono=True, duration=30)
                 return y, sr
             except Exception:
                 y, sr = librosa.load(file_path, sr=22050, mono=True)
@@ -67,7 +67,7 @@ class AudioProcessor:
 
         if ffmpeg_path is None:
             try:
-                y, sr = librosa.load(file_path, sr=None, mono=True)
+                y, sr = librosa.load(file_path, sr=22050, mono=True, duration=30)
                 return y, sr
             except Exception as e:
                 raise RuntimeError(

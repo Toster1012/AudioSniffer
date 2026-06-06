@@ -34,10 +34,10 @@ UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 DETECTOR_WEIGHTS = {
-    "silence": 0.10,
-    "pitch":   0.25,
-    "splice":  0.25,
-    "ai":      0.40,
+    "silence": 0.03,
+    "pitch":   0.12,
+    "splice":  0.15,
+    "ai":      0.70,
 }
 
 SUPPORTED_AUDIO = {'.wav', '.mp3', '.ogg', '.flac', '.m4a', '.aac'}
@@ -55,7 +55,7 @@ def compute_overall_confidence(detections: list) -> float:
     )
 
     peak = max(d.confidence for d in detections)
-    combined = weighted * 0.70 + peak * 0.30
+    combined = weighted * 0.85 + peak * 0.15
 
     return float(min(combined, 1.0))
 
@@ -75,7 +75,7 @@ async def _analyze_file(file_path: str, file_name: str) -> AnalysisResult:
 
     detections = [silence_result, pitch_result, splice_result, ai_result]
     overall_confidence = compute_overall_confidence(detections)
-    is_suspicious = overall_confidence > 0.35
+    is_suspicious = overall_confidence > 0.30
 
     audio_file_id = f"audio_{datetime.utcnow().timestamp()}_{file_name}"
 
