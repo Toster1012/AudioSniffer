@@ -1,4 +1,5 @@
 using AudioSniffer.Models;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -8,7 +9,7 @@ public class AudioAnalysisService : IAudioAnalysisService
 {
     private readonly ILogger<AudioAnalysisService> _logger;
     private readonly HttpClient _httpClient;
-    private const string PythonBackendUrl = "http://localhost:5000";
+    private const string PythonBackendUrl = "https://localhost:5000";
 
     private static readonly Dictionary<string, string> AudioContentTypes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -29,15 +30,17 @@ public class AudioAnalysisService : IAudioAnalysisService
     public AudioAnalysisService(ILogger<AudioAnalysisService> logger, IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
-        _httpClient = httpClientFactory.CreateClient();
+        var handler = new HttpClientHandler();
+        handler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true;
+        _httpClient = new HttpClient(handler);
         _httpClient.BaseAddress = new Uri(PythonBackendUrl);
         _httpClient.Timeout = TimeSpan.FromMinutes(5);
     }
 
     public async Task<(string ResultText, AnalysisResult? Result)> AnalyzeAudioAsync(byte[] audio_data, string file_name)
     {
-        int max_retries = 3;
-        int retry_delay = 2000;
+        const int max_retries = 3;
+        const int retry_delay = 2000;
 
         for (int attempt = 1; attempt <= max_retries; attempt++)
         {
@@ -50,7 +53,7 @@ public class AudioAnalysisService : IAudioAnalysisService
 
                 using MultipartFormDataContent request_content = new();
                 ByteArrayContent file_content = new(audio_data);
-                file_content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(content_type);
+                file_content.Headers.ContentType = new MediaTypeHeaderValue(content_type);
                 request_content.Add(file_content, "file", file_name);
 
                 HttpResponseMessage response = await _httpClient.PostAsync("/analyze", request_content);
@@ -59,16 +62,15 @@ public class AudioAnalysisService : IAudioAnalysisService
                 {
                     string error = await response.Content.ReadAsStringAsync();
                     _logger.LogError("Backend error {Status}: {Error}", response.StatusCode, error);
-                    return ($"Ошибка бэкенда ({(int)response.StatusCode}): {error}", null);
+                    return ($"Backend error ({(int)response.StatusCode}): {error}", null);
                 }
 
                 string json = await response.Content.ReadAsStringAsync();
-                _logger.LogDebug("Backend response: {Response}", json[..Math.Min(json.Length, 500)]);
 
                 AnalysisResult? result = JsonSerializer.Deserialize<AnalysisResult>(json, JsonOptions);
 
                 if (result == null)
-                    return ("Ошибка парсинга ответа от анализатора", null);
+                    return ("Error parsing analyzer response", null);
 
                 string result_text = BuildResultText(result.OverallConfidence, result.IsAiGenerated);
                 return (result_text, result);
@@ -81,16 +83,16 @@ public class AudioAnalysisService : IAudioAnalysisService
             catch (HttpRequestException ex)
             {
                 _logger.LogError(ex, "All {Max} attempts failed for {File}", max_retries, file_name);
-                return ("Не удалось подключиться к серверу анализа. Проверьте, что бэкенд запущен на localhost:5000", null);
+                return ("Cannot connect to analysis server. Ensure backend is running on localhost:5000", null);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error analyzing {File}", file_name);
-                return ($"Ошибка при обработке аудио: {ex.Message}", null);
+                return ($"Audio processing error: {ex.Message}", null);
             }
         }
 
-        return ("Не удалось подключиться к серверу анализа. Проверьте, что бэкенд запущен на localhost:5000", null);
+        return ("Cannot connect to analysis server. Ensure backend is running on localhost:5000", null);
     }
 
     public async Task<(string ResultText, BatchAnalysisResult? Result)> AnalyzeZipAsync(byte[] zip_data, string file_name)
@@ -99,7 +101,7 @@ public class AudioAnalysisService : IAudioAnalysisService
         {
             using MultipartFormDataContent request_content = new();
             ByteArrayContent file_content = new(zip_data);
-            file_content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/zip");
+            file_content.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
             request_content.Add(file_content, "file", file_name);
 
             HttpResponseMessage response = await _httpClient.PostAsync("/analyze/batch", request_content);
@@ -108,30 +110,30 @@ public class AudioAnalysisService : IAudioAnalysisService
             {
                 string error = await response.Content.ReadAsStringAsync();
                 _logger.LogError("Batch backend error {Status}: {Error}", response.StatusCode, error);
-                return ($"Ошибка бэкенда: {error}", null);
+                return ($"Backend error: {error}", null);
             }
 
             string json = await response.Content.ReadAsStringAsync();
             BatchAnalysisResult? result = JsonSerializer.Deserialize<BatchAnalysisResult>(json, JsonOptions);
 
             if (result == null)
-                return ("Ошибка парсинга ответа", null);
+                return ("Error parsing response", null);
 
             int ai_count = result.Results.Count(r => r.IsAiGenerated);
-            string summary = $"Проанализировано {result.AnalyzedFiles} из {result.TotalFiles} файлов. " +
-                             $"ИИ-генерация обнаружена в {ai_count} файлах.";
+            string summary = $"Analyzed {result.AnalyzedFiles} of {result.TotalFiles} files. " +
+                             $"AI generation detected in {ai_count} files.";
 
             return (summary, result);
         }
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "HTTP error in batch analysis");
-            return ("Не удалось подключиться к серверу анализа. Проверьте, что бэкенд запущен на localhost:5000", null);
+            return ("Cannot connect to analysis server. Ensure backend is running on localhost:5000", null);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error in batch analysis");
-            return ($"Ошибка при обработке архива: {ex.Message}", null);
+            return ($"Archive processing error: {ex.Message}", null);
         }
     }
 
@@ -145,7 +147,7 @@ public class AudioAnalysisService : IAudioAnalysisService
 
             using MultipartFormDataContent request_content = new();
             ByteArrayContent file_content = new(audio_data);
-            file_content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(content_type);
+            file_content.Headers.ContentType = new MediaTypeHeaderValue(content_type);
             request_content.Add(file_content, "file", file_name);
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -176,7 +178,6 @@ public class AudioAnalysisService : IAudioAnalysisService
 
         int step = Math.Max(1, usable / target);
         List<float> result = new();
-        Random rng = new(42);
 
         for (int i = offset; i < audio_data.Length && result.Count < target; i += step)
         {
@@ -196,19 +197,17 @@ public class AudioAnalysisService : IAudioAnalysisService
     {
         if (is_ai)
         {
-            if (confidence >= 0.85f)
-                return $"Аудио сгенерировано нейросетью с высокой вероятностью: {confidence:P0}";
-            else if (confidence >= 0.60f)
-                return $"Аудио вероятно сгенерировано нейросетью: {confidence:P0}";
-            else
-                return $"Аудио возможно сгенерировано нейросетью: {confidence:P0}";
+            return confidence >= 0.85f 
+                ? $"Audio generated by neural network with high probability: {confidence:P0}"
+                : confidence >= 0.60f 
+                    ? $"Audio likely generated by neural network: {confidence:P0}"
+                    : $"Audio possibly generated by neural network: {confidence:P0}";
         }
         else
         {
-            if (confidence <= 0.15f)
-                return $"Аудио похоже на живую запись. Вероятность ИИ: {confidence:P0}";
-            else
-                return $"Аудио вряд ли сгенерировано нейросетью. Вероятность ИИ: {confidence:P0}";
+            return confidence <= 0.15f
+                ? $"Audio appears to be live recording. AI probability: {confidence:P0}"
+                : $"Audio unlikely generated by neural network. AI probability: {confidence:P0}";
         }
     }
 }
