@@ -1,5 +1,6 @@
 @echo off
 title AudioSniffer System Launcher
+
 echo Starting AudioSniffer System...
 echo ==================================
 
@@ -34,8 +35,7 @@ if %errorlevel% equ 0 (
         timeout /t 5 /nobreak >nul
         goto check_backend
     )
-    echo Warning: Backend not responding after multiple attempts, will try to start frontend anyway
-    echo You may need to wait a bit longer for the backend to fully initialize
+    echo Warning: Backend not responding after multiple attempts, starting frontend anyway...
 )
 
 :start_frontend
@@ -46,13 +46,24 @@ REM Kill any existing processes that might block the port
 taskkill /f /im AudioSniffer.exe >nul 2>&1
 taskkill /f /im dotnet.exe >nul 2>&1
 
-cd /d %~dp0AudioSniffer
+REM The C# project lives in AudioSniffer\AudioSniffer\
+cd /d "%~dp0AudioSniffer"
 
-REM Start frontend and wait for it to complete
+if not exist "AudioSniffer.csproj" (
+    echo ERROR: AudioSniffer.csproj not found in %cd%
+    echo Make sure the project structure is correct.
+    pause
+    exit /b 1
+)
+
 echo Starting frontend (this window will stay open while the application is running)...
 echo.
 echo If you want to stop the application, press Ctrl+C in this window.
 echo.
+echo Open browser at: http://localhost:8000
+echo Admin panel at:  http://localhost:8000/admin
+echo.
+
 dotnet run
 
 echo.

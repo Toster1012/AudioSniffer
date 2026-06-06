@@ -1,0 +1,472 @@
+@page "/"
+@rendermode RenderMode.InteractiveServer
+@using AudioSniffer.Services
+@using AudioSniffer.Models
+@using System.IO
+@using System.Linq
+@inject IAudioAnalysisService AudioService
+@inject IRequestHistoryService HistoryService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>AudioSniffer - Анализ аудио</PageTitle>
+
+<div class="audio-analyzer-container">
+    <div class="neon-background">
+        <div class="neon-grid"></div>
+        <div class="neon-orb neon-orb-1"></div>
+        <div class="neon-orb neon-orb-2"></div>
+        <div class="neon-orb neon-orb-3"></div>
+        <div class="neon-orb neon-orb-4"></div>
+    </div>
+
+    <div class="content-wrapper">
+        <h1 class="neon-title">
+            <span class="glitch">AudioSniffer</span>
+        </h1>
+        <p class="subtitle">Определяет, создано ли аудио с помощью ИИ</p>
+
+        <!-- Upload mode selector -->
+        <div class="mode-selector">
+            <button class="mode-btn @(_uploadMode == "single" ? "active" : "")"
+                    @onclick='() => _uploadMode = "single"'>
+                🎵 Один файл
+            </button>
+            <button class="mode-btn @(_uploadMode == "zip" ? "active" : "")"
+                    @onclick='() => _uploadMode = "zip"'>
+                📦 ZIP-архив
+            </button>
+        </div>
+
+        <!-- Single file upload -->
+        @if (_uploadMode == "single")
+        {
+            <div class="upload-section">
+                <InputFile
+                    OnChange="HandleSingleFileAsync"
+                    class="file-input"
+                    id="fileInput"
+                    accept=".mp3,.wav,.ogg,.aac,.flac,.m4a"
+                    disabled="@_isProcessing" />
+
+                <label for="fileInput" class="neon-button @(_isProcessing ? "disabled" : "")">
+                    <span class="button-glow"></span>
+                    <span class="button-text">
+                        @if (_isProcessing)
+                        {
+                            <span class="spinner"></span>
+                            <text>Анализ...</text>
+                        }
+                        else
+                        {
+                            <text>Загрузить аудиофайл</text>
+                        }
+                    </span>
+                </label>
+            </div>
+        }
+
+        <!-- ZIP upload -->
+        @if (_uploadMode == "zip")
+        {
+            <div class="upload-section">
+                <InputFile
+                    OnChange="HandleZipFileAsync"
+                    class="file-input"
+                    id="zipInput"
+                    accept=".zip"
+                    disabled="@_isProcessing" />
+
+                <label for="zipInput" class="neon-button @(_isProcessing ? "disabled" : "")">
+                    <span class="button-glow"></span>
+                    <span class="button-text">
+                        @if (_isProcessing)
+                        {
+                            <span class="spinner"></span>
+                            <text>Обработка архива...</text>
+                        }
+                        else
+                        {
+                            <text>Загрузить ZIP-архив</text>
+                        }
+                    </span>
+                </label>
+            </div>
+            <p class="zip-hint">ZIP может содержать до 20 аудиофайлов (.mp3, .wav, .ogg, .flac, .m4a, .aac)</p>
+        }
+
+        <!-- Progress bar -->
+        @if (_isProcessing)
+        {
+            <div class="progress-container fade-in">
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: @(_progressPercent)%"></div>
+                </div>
+                <span class="progress-label">@_progressLabel</span>
+            </div>
+        }
+
+        <!-- File name -->
+        @if (_selectedFileName != null)
+        {
+            <div class="file-info neon-card fade-in">
+                <span class="file-icon">🎵</span>
+                <span class="file-name">@_selectedFileName</span>
+            </div>
+        }
+
+        <!-- Waveform -->
+        @if (_waveformData != null && _waveformData.Length > 0)
+        {
+            <div class="waveform-container neon-card fade-in">
+                <div class="section-label">Форма волны</div>
+                <div class="canvas-container">
+                    <canvas @ref="_waveformCanvas" id="waveformCanvas"></canvas>
+                </div>
+            </div>
+        }
+
+        <!-- Spectrogram -->
+        @if (_spectrogramData != null && _spectrogramData.Magnitudes.Count > 0)
+        {
+            <div class="spectrogram-container neon-card fade-in">
+                <div class="section-label">
+                    Спектрограмма
+                    @if (_spectrogramData.SuspiciousRegions.Count > 0)
+                    {
+                        <span class="suspicious-badge">⚠️ @_spectrogramData.SuspiciousRegions.Count подозрительных зон</span>
+                    }
+                </div>
+                <div class="canvas-container spectrogram-canvas-container">
+                    <canvas @ref="_spectrogramCanvas" id="spectrogramCanvas"></canvas>
+                </div>
+                @if (_spectrogramData.SuspiciousRegions.Count > 0)
+                {
+                    <div class="suspicious-regions">
+                        @foreach (var region in _spectrogramData.SuspiciousRegions)
+                        {
+                            <span class="region-tag">
+                                @region.Start.ToString("0.0")s – @region.End.ToString("0.0")s
+                                (интенсивность: @((region.Intensity * 100).ToString("0"))%)
+                            </span>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- Single result -->
+        @if (!string.IsNullOrEmpty(_resultText) && _batchResult == null)
+        {
+            <div class="result-section fade-in">
+                <div class="result-content neon-card @GetResultClass()">
+                    <p class="result-text">@_resultText</p>
+
+                    @if (_analysisResult != null)
+                    {
+                        <div class="confidence-bar-wrapper">
+                            <div class="confidence-bar">
+                                <div class="confidence-fill" style="width: @((_analysisResult.OverallConfidence * 100).ToString("0"))%"
+                                     data-value="@_analysisResult.OverallConfidence"></div>
+                            </div>
+                            <span class="confidence-value">@((_analysisResult.OverallConfidence * 100).ToString("0.0"))%</span>
+                        </div>
+
+                        <div class="metadata-row">
+                            <span>⏱ @_analysisResult.Metadata.DurationSeconds.ToString("0.0")с</span>
+                            <span>📡 @_analysisResult.Metadata.SampleRate Гц</span>
+                            <span>🔊 @_analysisResult.Metadata.Channels кан.</span>
+                            <span>📁 @_analysisResult.Metadata.Format.ToUpper()</span>
+                        </div>
+
+                        <div class="detections-grid">
+                            @foreach (var detection in _analysisResult.Detections)
+                            {
+                                <div class="detection-card @(detection.Confidence > 0.5 ? "high" : detection.Confidence > 0.25 ? "medium" : "low")">
+                                    <div class="detection-header">
+                                        <span class="detection-title">@detection.Title</span>
+                                        <span class="detection-score">@((detection.Confidence * 100).ToString("0"))%</span>
+                                    </div>
+                                    <div class="detection-bar">
+                                        <div class="detection-fill" style="width: @((detection.Confidence * 100).ToString("0"))%"></div>
+                                    </div>
+                                    <p class="detection-desc">@detection.Description</p>
+                                    @if (detection.Markers.Count > 0)
+                                    {
+                                        <div class="markers-list">
+                                            @foreach (var marker in detection.Markers.Take(3))
+                                            {
+                                                <span class="marker-tag">
+                                                    @marker.StartTime.ToString("0.0")s–@marker.EndTime.ToString("0.0")s
+                                                </span>
+                                            }
+                                            @if (detection.Markers.Count > 3)
+                                            {
+                                                <span class="marker-tag more">+@(detection.Markers.Count - 3)</span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Batch results -->
+        @if (_batchResult != null)
+        {
+            <div class="batch-results fade-in">
+                <div class="batch-summary neon-card">
+                    <div class="batch-stat">
+                        <span class="batch-num">@_batchResult.TotalFiles</span>
+                        <span class="batch-label">Всего файлов</span>
+                    </div>
+                    <div class="batch-stat">
+                        <span class="batch-num green">@_batchResult.AnalyzedFiles</span>
+                        <span class="batch-label">Проанализировано</span>
+                    </div>
+                    <div class="batch-stat">
+                        <span class="batch-num red">@(_batchResult.Results.Count(r => r.IsAiGenerated))</span>
+                        <span class="batch-label">ИИ-генерация</span>
+                    </div>
+                    @if (_batchResult.FailedFiles > 0)
+                    {
+                        <div class="batch-stat">
+                            <span class="batch-num orange">@_batchResult.FailedFiles</span>
+                            <span class="batch-label">Ошибки</span>
+                        </div>
+                    }
+                </div>
+
+                <div class="batch-list">
+                    @foreach (var item in _batchResult.Results.OrderByDescending(r => r.OverallConfidence))
+                    {
+                        <div class="batch-item neon-card @(item.IsAiGenerated ? "ai" : "real")">
+                            <div class="batch-item-header">
+                                <span class="batch-item-icon">@(item.IsAiGenerated ? "🔴" : "🟢")</span>
+                                <span class="batch-item-name">@(string.IsNullOrEmpty(item.FileName) ? item.AudioFileId : item.FileName)</span>
+                                <span class="batch-item-conf">@((item.OverallConfidence * 100).ToString("0.0"))%</span>
+                            </div>
+                            <div class="batch-item-bar">
+                                <div class="batch-item-fill @(item.IsAiGenerated ? "ai" : "real")"
+                                     style="width: @((item.OverallConfidence * 100).ToString("0"))%"></div>
+                            </div>
+                            <div class="batch-item-meta">
+                                <span>@item.Metadata.DurationSeconds.ToString("0.0")с</span>
+                                <span>@item.Metadata.Format.ToUpper()</span>
+                                <span>@(item.IsAiGenerated ? "⚠️ Синтетика" : "✅ Живое")</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @if (_batchResult.Errors.Count > 0)
+                {
+                    <div class="batch-errors neon-card">
+                        <div class="section-label">Ошибки обработки</div>
+                        @foreach (var err in _batchResult.Errors)
+                        {
+                            <div class="batch-error-item">
+                                <span class="err-file">@err.File</span>: <span class="err-msg">@err.Error</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- Error -->
+        @if (!string.IsNullOrEmpty(_errorText))
+        {
+            <div class="error-message neon-card fade-in">
+                <span class="error-icon">⚠️</span>
+                <span>@_errorText</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private static readonly string[] AllowedAudio = { ".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a" };
+
+    private ElementReference _waveformCanvas;
+    private ElementReference _spectrogramCanvas;
+
+    private string _uploadMode = "single";
+    private string? _selectedFileName;
+    private string? _resultText;
+    private string? _errorText;
+    private float[]? _waveformData;
+    private SpectrogramData? _spectrogramData;
+    private AnalysisResult? _analysisResult;
+    private BatchAnalysisResult? _batchResult;
+    private bool _isProcessing;
+    private int _progressPercent;
+    private string _progressLabel = "";
+
+    private async Task HandleSingleFileAsync(InputFileChangeEventArgs e)
+    {
+        ResetState();
+        var file = e.File;
+        if (file == null) return;
+
+        if (!ValidateFile(file, AllowedAudio)) return;
+
+        _isProcessing = true;
+        _selectedFileName = SanitizeName(file.Name);
+        StateHasChanged();
+
+        try
+        {
+            byte[] data = await ReadFileAsync(file);
+
+            // Step 1: Waveform
+            SetProgress(20, "Построение формы волны...");
+            _waveformData = await AudioService.GetWaveformDataAsync(data, _selectedFileName);
+            StateHasChanged();
+            if (_waveformData?.Length > 0)
+                await JSRuntime.InvokeVoidAsync("drawWaveform", _waveformCanvas, System.Text.Json.JsonSerializer.Serialize(_waveformData));
+
+            // Step 2: Analysis
+            SetProgress(50, "Анализ аудио...");
+            var (text, result) = await AudioService.AnalyzeAudioAsync(data, _selectedFileName);
+            _resultText = text;
+            _analysisResult = result;
+
+            // Step 3: Spectrogram
+            if (result?.SpectrogramData != null && result.SpectrogramData.Magnitudes.Count > 0)
+            {
+                SetProgress(85, "Построение спектрограммы...");
+                _spectrogramData = result.SpectrogramData;
+                StateHasChanged();
+                await DrawSpectrogramAsync();
+            }
+
+            if (result != null)
+                await HistoryService.SaveAnalysisAsync(new AudioSniffer.Models.AnalysisResult
+                {
+                    AudioFileId = result.AudioFileId,
+                    FileName = result.FileName,
+                    OverallConfidence = result.OverallConfidence,
+                    IsSuspicious = result.IsAiGenerated,
+                    Detections = result.Detections,
+                    Metadata = result.Metadata
+                });
+
+            SetProgress(100, "Готово");
+        }
+        catch (Exception ex)
+        {
+            _errorText = $"Ошибка при обработке файла: {ex.Message}";
+        }
+        finally
+        {
+            _isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleZipFileAsync(InputFileChangeEventArgs e)
+    {
+        ResetState();
+        var file = e.File;
+        if (file == null) return;
+
+        if (!file.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            _errorText = "Ожидается ZIP-архив";
+            return;
+        }
+
+        if (file.Size > 200 * 1024 * 1024)
+        {
+            _errorText = "ZIP-архив слишком большой. Максимум 200 МБ";
+            return;
+        }
+
+        _isProcessing = true;
+        _selectedFileName = SanitizeName(file.Name);
+        StateHasChanged();
+
+        try
+        {
+            SetProgress(10, "Загрузка архива...");
+            byte[] data = await ReadFileAsync(file, maxSize: 200 * 1024 * 1024);
+
+            SetProgress(30, "Анализ файлов в архиве...");
+            var (text, result) = await AudioService.AnalyzeZipAsync(data, _selectedFileName);
+            _resultText = text;
+            _batchResult = result;
+
+            SetProgress(100, "Готово");
+        }
+        catch (Exception ex)
+        {
+            _errorText = $"Ошибка при обработке архива: {ex.Message}";
+        }
+        finally
+        {
+            _isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DrawSpectrogramAsync()
+    {
+        if (_spectrogramData == null) return;
+        var json = System.Text.Json.JsonSerializer.Serialize(_spectrogramData);
+        await JSRuntime.InvokeVoidAsync("drawSpectrogram", _spectrogramCanvas, json);
+    }
+
+    private void ResetState()
+    {
+        _errorText = null;
+        _resultText = null;
+        _waveformData = null;
+        _spectrogramData = null;
+        _selectedFileName = null;
+        _analysisResult = null;
+        _batchResult = null;
+        _progressPercent = 0;
+        _progressLabel = "";
+    }
+
+    private bool ValidateFile(Microsoft.AspNetCore.Components.Forms.IBrowserFile file, string[] allowed)
+    {
+        if (file.Size > 50 * 1024 * 1024) { _errorText = "Файл слишком большой. Максимум 50 МБ"; return false; }
+        if (file.Size == 0) { _errorText = "Файл пустой"; return false; }
+        string ext = Path.GetExtension(file.Name)?.ToLowerInvariant() ?? "";
+        if (!allowed.Contains(ext)) { _errorText = $"Неверный формат. Разрешены: {string.Join(", ", allowed).ToUpper()}"; return false; }
+        return true;
+    }
+
+    private static async Task<byte[]> ReadFileAsync(Microsoft.AspNetCore.Components.Forms.IBrowserFile file, long maxSize = 50 * 1024 * 1024)
+    {
+        await using var stream = file.OpenReadStream(maxAllowedSize: maxSize);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        return ms.ToArray();
+    }
+
+    private void SetProgress(int percent, string label)
+    {
+        _progressPercent = percent;
+        _progressLabel = label;
+        StateHasChanged();
+    }
+
+    private string SanitizeName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        return new string(name.Where(c => !invalid.Contains(c)).ToArray()).Trim();
+    }
+
+    private string GetResultClass()
+    {
+        if (_analysisResult == null) return "";
+        if (_analysisResult.IsAiGenerated)
+            return _analysisResult.OverallConfidence >= 0.7f ? "result-danger" : "result-warning";
+        return "result-safe";
+    }
+}

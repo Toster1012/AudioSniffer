@@ -1,0 +1,130 @@
+@page "/admin"
+@rendermode RenderMode.InteractiveServer
+@using AudioSniffer.Services
+@using AudioSniffer.Models
+@inject IRequestHistoryService HistoryService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>AudioSniffer — Панель администратора</PageTitle>
+
+<div class="neon-background">
+    <div class="neon-grid"></div>
+    <div class="neon-orb neon-orb-1"></div>
+    <div class="neon-orb neon-orb-2"></div>
+</div>
+
+<div class="admin-container">
+    <div class="admin-header">
+        <h1>🛡️ Панель администратора</h1>
+        <p>Статистика анализов AudioSniffer</p>
+        <a href="/" class="neon-button" style="display:inline-flex;margin-top:16px;text-decoration:none;">← Вернуться к анализу</a>
+    </div>
+
+    @if (_stats != null)
+    {
+        <div class="stats-overview">
+            <div class="stat-card">
+                <h3>Всего анализов</h3>
+                <div class="stat-value">@_stats.TotalAnalyses</div>
+            </div>
+            <div class="stat-card">
+                <h3>ИИ-генерация</h3>
+                <div class="stat-value generated">@_stats.AiGenerated</div>
+            </div>
+            <div class="stat-card">
+                <h3>Живые записи</h3>
+                <div class="stat-value real">@_stats.RealAudio</div>
+            </div>
+            <div class="stat-card">
+                <h3>Средняя уверенность</h3>
+                <div class="stat-value">@((_stats.AverageConfidence * 100).ToString("0.0"))%</div>
+            </div>
+        </div>
+
+        @if (_stats.DailyCounts.Count > 0)
+        {
+            <div class="chart-container">
+                <canvas @ref="_chartCanvas" id="adminChart"></canvas>
+            </div>
+        }
+    }
+
+    <div class="recent-files">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+            <h2>История анализов</h2>
+            <button class="neon-button" style="font-size:14px;padding:8px 18px;" @onclick="ClearHistoryAsync">
+                🗑 Очистить историю
+            </button>
+        </div>
+
+        @if (_history.Count == 0)
+        {
+            <p style="color:var(--text-secondary);text-align:center;padding:40px 0;">
+                Нет данных. Загрузите аудиофайл для анализа.
+            </p>
+        }
+        else
+        {
+            <table class="history-table">
+                <thead>
+                    <tr>
+                        <th>Файл</th>
+                        <th>Результат</th>
+                        <th>Уверенность</th>
+                        <th>Длительность</th>
+                        <th>Формат</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in _history)
+                    {
+                        <tr>
+                            <td>@(string.IsNullOrEmpty(item.FileName) ? item.AudioFileId : item.FileName)</td>
+                            <td class="@(item.IsAiGenerated ? "generated" : "real")">
+                                @(item.IsAiGenerated ? "🔴 ИИ-генерация" : "🟢 Живое аудио")
+                            </td>
+                            <td>@((item.OverallConfidence * 100).ToString("0.0"))%</td>
+                            <td>@item.Metadata.DurationSeconds.ToString("0.0")с</td>
+                            <td>@item.Metadata.Format.ToUpper()</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@code {
+    private AdminStats? _stats;
+    private List<AnalysisResult> _history = new();
+    private ElementReference _chartCanvas;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _stats?.DailyCounts.Count > 0)
+        {
+            var dates = _stats.DailyCounts.Select(d => d.Date).ToArray();
+            var generated = _stats.DailyCounts.Select(d => d.Generated).ToArray();
+            var real = _stats.DailyCounts.Select(d => d.Real).ToArray();
+            await JSRuntime.InvokeVoidAsync("createComparisonChart", _chartCanvas, dates, generated, real);
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _stats = await HistoryService.GetStatsAsync();
+        _history = await HistoryService.GetHistoryAsync(100);
+        StateHasChanged();
+    }
+
+    private async Task ClearHistoryAsync()
+    {
+        await HistoryService.ClearHistoryAsync();
+        await LoadDataAsync();
+    }
+}
