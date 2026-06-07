@@ -13,8 +13,8 @@ class DetectorType(str, Enum):
 class TimeMarker(BaseModel):
     start_time: float = Field(..., description="Начало в секундах")
     end_time: float = Field(..., description="Конец в секундах")
-    confidence: float = Field(..., ge=0.0, le=1.0, description="Уверенность 0-1")
-    description: str = Field(default="", description="Описание аномалии")
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    description: str = Field(default="")
 
 
 class DetectionResult(BaseModel):
@@ -60,6 +60,6 @@ class BatchAnalysisResult(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str = "healthy"
-    version: str = "3.0.0"
+    version: str = "3.1.0"
     detectors: List[str] = ["silence", "pitch", "splice", "ai"]
     error: Optional[str] = None

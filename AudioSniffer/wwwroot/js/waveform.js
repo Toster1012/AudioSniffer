@@ -1,4 +1,4 @@
-﻿window.drawWaveform = function(canvas, dataJson) {
+window.drawWaveform = function(canvas, dataJson) {
     const data = JSON.parse(dataJson);
     const ctx = canvas.getContext('2d');
 

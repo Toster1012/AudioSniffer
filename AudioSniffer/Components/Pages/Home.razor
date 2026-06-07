@@ -25,19 +25,17 @@
         </h1>
         <p class="subtitle">Определяет, создано ли аудио с помощью ИИ</p>
 
-        
         <div class="mode-selector">
             <button class="mode-btn @(_uploadMode == "single" ? "active" : "")"
                     @onclick='() => _uploadMode = "single"'>
-                 Один файл
+                Один файл
             </button>
             <button class="mode-btn @(_uploadMode == "zip" ? "active" : "")"
                     @onclick='() => _uploadMode = "zip"'>
-                 ZIP-архив
+                ZIP-архив
             </button>
         </div>
 
-        
         @if (_uploadMode == "single")
         {
             <div class="upload-section">
@@ -65,7 +63,6 @@
             </div>
         }
 
-        
         @if (_uploadMode == "zip")
         {
             <div class="upload-section">
@@ -94,7 +91,6 @@
             <p class="zip-hint">ZIP может содержать до 20 аудиофайлов (.mp3, .wav, .ogg, .flac, .m4a, .aac)</p>
         }
 
-        
         @if (_isProcessing)
         {
             <div class="progress-container fade-in">
@@ -105,16 +101,13 @@
             </div>
         }
 
-        
         @if (_selectedFileName != null)
         {
             <div class="file-info neon-card fade-in">
-                <span class="file-icon"></span>
                 <span class="file-name">@_selectedFileName</span>
             </div>
         }
 
-        
         @if (_waveformData != null && _waveformData.Length > 0)
         {
             <div class="waveform-container neon-card fade-in">
@@ -125,7 +118,6 @@
             </div>
         }
 
-        
         @if (_spectrogramData != null && _spectrogramData.Magnitudes.Count > 0)
         {
             <div class="spectrogram-container neon-card fade-in">
@@ -133,7 +125,7 @@
                     Спектрограмма
                     @if (_spectrogramData.SuspiciousRegions.Count > 0)
                     {
-                        <span class="suspicious-badge"> @_spectrogramData.SuspiciousRegions.Count подозрительных зон</span>
+                        <span class="suspicious-badge">@_spectrogramData.SuspiciousRegions.Count подозрительных зон</span>
                     }
                 </div>
                 <div class="canvas-container spectrogram-canvas-container">
@@ -154,7 +146,6 @@
             </div>
         }
 
-        
         @if (!string.IsNullOrEmpty(_resultText) && _batchResult == null)
         {
             <div class="result-section fade-in">
@@ -174,8 +165,8 @@
                         <div class="metadata-row">
                             <span>@_analysisResult.Metadata.DurationSeconds.ToString("0.0")с</span>
                             <span>@_analysisResult.Metadata.SampleRate Гц</span>
-                            <span> @_analysisResult.Metadata.Channels кан.</span>
-                            <span> @_analysisResult.Metadata.Format.ToUpper()</span>
+                            <span>@_analysisResult.Metadata.Channels кан.</span>
+                            <span>@_analysisResult.Metadata.Format.ToUpper()</span>
                         </div>
 
                         <div class="detections-grid">
@@ -213,7 +204,6 @@
             </div>
         }
 
-        
         @if (_batchResult != null)
         {
             <div class="batch-results fade-in">
@@ -244,7 +234,6 @@
                     {
                         <div class="batch-item neon-card @(item.IsAiGenerated ? "ai" : "real")">
                             <div class="batch-item-header">
-                                <span class="batch-item-icon">@(item.IsAiGenerated ? "" : "")</span>
                                 <span class="batch-item-name">@(string.IsNullOrEmpty(item.FileName) ? item.AudioFileId : item.FileName)</span>
                                 <span class="batch-item-conf">@((item.OverallConfidence * 100).ToString("0.0"))%</span>
                             </div>
@@ -255,7 +244,7 @@
                             <div class="batch-item-meta">
                                 <span>@item.Metadata.DurationSeconds.ToString("0.0")с</span>
                                 <span>@item.Metadata.Format.ToUpper()</span>
-                                <span>@(item.IsAiGenerated ? " Синтетика" : "✅ Живое")</span>
+                                <span class="@(item.IsAiGenerated ? "label-ai" : "label-real")">@(item.IsAiGenerated ? "Синтетика" : "Живое")</span>
                             </div>
                         </div>
                     }
@@ -276,11 +265,9 @@
             </div>
         }
 
-        
         @if (!string.IsNullOrEmpty(_errorText))
         {
             <div class="error-message neon-card fade-in">
-                <span class="error-icon"></span>
                 <span>@_errorText</span>
             </div>
         }

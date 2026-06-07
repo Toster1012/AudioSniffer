@@ -1,4 +1,4 @@
-﻿:root {
+:root {
     --primary-blue: #0071e3;
     --primary-blue-hover: #0077ed;
     --text-primary: #1d1d1f;
@@ -335,10 +335,6 @@ body {
     line-height: 1.47059;
 }
 
-.file-icon {
-    font-size: 28px;
-}
-
 .file-name {
     color: var(--text-primary);
     font-weight: 500;
@@ -436,10 +432,6 @@ body {
         border: 1px solid rgba(255, 214, 10, 0.2);
         color: #ffd60a;
     }
-}
-
-.error-icon {
-    font-size: 20px;
 }
 
 .fade-in {
@@ -1149,3 +1141,13 @@ div[aria-live="assertive"] {
 
 .err-file { font-weight: 600; }
 .err-msg { color: #ff5050; }
+
+.label-ai {
+    color: var(--neon-pink);
+    font-weight: 600;
+}
+
+.label-real {
+    color: var(--neon-green);
+    font-weight: 600;
+}
